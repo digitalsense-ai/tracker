@@ -1,30 +1,22 @@
-
 <?php
 
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Stock;
+use App\Services\YahooStockService;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        // Dummy stock data for display
-        $stocks = collect([
-            (object)[
-                'ticker' => 'AAPL', 'gap' => 4.2, 'rvol' => 1.6,
-                'volume' => 2500000, 'status' => 'forecast', 'forecast' => 'gap-up'
-            ],
-            (object)[
-                'ticker' => 'TSLA', 'gap' => 2.8, 'rvol' => 1.7,
-                'volume' => 3500000, 'status' => 'forecast', 'forecast' => 'gap-up'
-            ],
-            (object)[
-                'ticker' => 'AMZN', 'gap' => 3.5, 'rvol' => 1.4,
-                'volume' => 1900000, 'status' => 'forecast', 'forecast' => 'gap-down'
-            ],
+        $forecastSettings = session('forecast_config', [
+            'min_gap' => 3,
+            'min_rvol' => 1.5,
+            'min_volume' => 2000000,
+            'forecast_type' => 'gap-up',
         ]);
+
+        $stocks = collect(YahooStockService::getLiveForecastStocks($forecastSettings));
 
         return view('dashboard', compact('stocks'));
     }
