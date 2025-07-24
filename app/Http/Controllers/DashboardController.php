@@ -3,35 +3,32 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Services\YahooStockService;
+use App\Models\Stock;
 
 class DashboardController extends Controller
 {
     public function index()
     {
-        $forecastSettings = session('forecast_config', [
+        // Hent alle stocks fra databasen
+        $stocks = Stock::all();
+
+        // Simuleret forecast settings (kan udvides med DB senere)
+        $forecastSettings = [
             'min_gap' => 3,
             'min_rvol' => 1.5,
             'min_volume' => 2000000,
             'forecast_type' => 'gap-up',
+        ];
+
+        return view('dashboard', [
+            'stocks' => $stocks,
+            'forecastSettings' => $forecastSettings,
         ]);
-
-        $stocks = collect(YahooStockService::getLiveForecastStocks($forecastSettings));
-
-        return view('dashboard', compact('stocks'));
     }
 
     public function updateForecastConfig(Request $request)
     {
-        $validated = $request->validate([
-            'min_gap' => 'required|numeric',
-            'min_rvol' => 'required|numeric',
-            'min_volume' => 'required|integer',
-            'forecast_type' => 'required|string',
-        ]);
-
-        session(['forecast_config' => $validated]);
-
-        return redirect('/dashboard')->with('success', 'Forecast settings updated!');
+        // TODO: Gem settings i DB, for nu redirect
+        return redirect('/dashboard')->with('status', 'Forecast settings updated!');
     }
 }
