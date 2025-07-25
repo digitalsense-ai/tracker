@@ -1,4 +1,3 @@
-
 <?php
 
 namespace App\Http\Controllers;
@@ -10,28 +9,7 @@ class TradeResultController extends Controller
 {
     public function index()
     {
-        // Dummy trades until DB is fully populated
-        $trades = collect([
-            (object)[
-                'ticker' => 'AAPL',
-                'date' => '2024-07-18',
-                'entry_price' => 182.45,
-                'exit_price' => 185.00,
-                'stop_loss' => 180.00,
-                'result' => 'win',
-                'forecast_type' => 'gap-up',
-            ],
-            (object)[
-                'ticker' => 'TSLA',
-                'date' => '2024-07-18',
-                'entry_price' => 690.10,
-                'exit_price' => 675.00,
-                'stop_loss' => 680.00,
-                'result' => 'loss',
-                'forecast_type' => 'volatility-squeeze',
-            ],
-        ]);
-
+        $trades = Trade::orderBy('date', 'desc')->get();
         return view('results', compact('trades'));
     }
 }
