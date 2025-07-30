@@ -11,13 +11,13 @@ return new class extends Migration {
             $table->string('ticker');
             $table->decimal('entry_price', 10, 2)->nullable();
             $table->decimal('exit_price', 10, 2)->nullable();
-            $table->decimal('fees', 10, 2)->nullable();
+            $table->decimal('fees', 10, 2)->nullable()->comment('Calculated based on Nordnet fee model');
             $table->decimal('net_profit', 10, 2)->nullable();
             $table->boolean('earnings_day')->default(false);
             $table->string('forecast_type')->nullable();
             $table->decimal('forecast_score', 5, 2)->nullable();
             $table->string('trend_rating')->nullable();
-            $table->boolean('executed_on_nordnet')->default(false);
+            $table->boolean('executed_on_nordnet')->default(false)->comment('True if this trade was executed via Nordnet');
             $table->timestamps();
         });
     }

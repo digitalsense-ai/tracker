@@ -15,7 +15,9 @@ class ForecastScanCommand extends Command
     {
         $this->info('Starting forecast scan...');
 
-        $tickers = json_decode(file_get_contents(base_path('nordnet_tickers.json')));
+        //$tickers = json_decode(file_get_contents(base_path('nordnet_tickers.json')));
+        $tickers = json_decode(file_get_contents(storage_path('app/nordnet_tickers.json')));
+
         $apiKey = config('services.finnhub.key');
         $minGap = config('forecast.min_gap');
         $minRvol = config('forecast.min_rvol');
