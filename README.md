@@ -1,108 +1,100 @@
-# ORB Trading Dashboard – Laravel Project
+# 📊 ORB Trading Tracker
 
-This is a Laravel-based web dashboard for tracking and managing Opening Range Breakout (ORB) trading setups.  
-The system includes components for **forecast**, **breakout**, **retest**, **entry**, and **exit**, and is built for easy expansion and integration with real-time market data.
-
----
-
-## 📁 Project Structure
-
-```
-app/
-├── Http/Controllers/DashboardController.php
-├── Models/Stock.php
-
-database/
-├── migrations/xxxx_xx_xx_create_stocks_table.php
-├── seeders/StockSeeder.php
-
-resources/views/
-├── dashboard.blade.php
-├── partials/
-│   ├── breakout.blade.php
-│   ├── retest.blade.php
-│   ├── entry_exit.blade.php
-│   └── strategy-settings.blade.php
-
-routes/
-├── web.php
-```
+A Laravel-based web application for real-time stock strategy analysis using Opening Range Breakout (ORB), gap forecasting, and simulated trade tracking.
 
 ---
 
-## 🚀 Getting Started
+## 🔍 Features Overview
 
-1. **Clone the repository**
+- ✅ Live forecast screening based on gap %, volume, and RVOL
+- 📈 Strategy phase tracking: Forecast → Breakout → Retest → Entry → Exit
+- 🤖 Automated simulation of trades (entry/exit logic)
+- 💰 Result table with net profit, fees, and Nordnet execution flag
+- 🕒 Daily data refresh via scheduled cron jobs
+
+---
+
+## 🧱 Requirements
+
+- PHP 8.1+
+- Laravel 10+
+- MySQL or MariaDB
+- Composer
+- Node.js and npm (for frontend assets)
+
+---
+
+## 🗂 Project Structure
+
+| Folder | Purpose |
+|--------|---------|
+| `resources/views/` | Blade templates (`dashboard`, `explainer`, `results`) |
+| `app/Http/Controllers/` | Route logic and rendering |
+| `app/Console/Commands/` | Custom Artisan commands (forecast + simulation) |
+| `database/migrations/` | DB schema |
+| `public/` | Static assets, favicon, CSS |
+
+---
+
+## 🛠 Simulated Trades Table Fields
+
+| Field | Description |
+|-------|-------------|
+| `ticker` | Stock ticker symbol |
+| `entry_price` | Simulated entry price |
+| `exit_price` | Simulated exit price |
+| `fees` | Calculated Nordnet fee |
+| `net_profit` | Profit or loss |
+| `earnings_day` | True if on earnings release day |
+| `forecast_type` | Gap-up, gap-down, consolidation, etc. |
+| `forecast_score` | Score or quality rank |
+| `trend_rating` | Simple trend assessment |
+| `executed_on_nordnet` | True if it matched Nordnet trading availability |
+
+---
+
+## ⚙️ Forecast Type Options
+
+- `gap-up`
+- `gap-down`
+- `consolidation`
+- `volatility-squeeze`
+- `breakout-ready`
+- `mean-revert`
+
+---
+
+## ⏱ Cron Setup
+
+To automate daily scans and simulations, add this to your crontab:
+
 ```bash
-git clone https://github.com/[YOUR_USERNAME]/tracker.git
-cd tracker
+* * * * * cd /var/www/tracker && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-2. **Install dependencies**
+Or run manually:
+
 ```bash
-composer install
-npm install && npm run dev
-```
-
-3. **Create your environment file**
-```bash
-cp .env.example .env
-php artisan key:generate
-```
-
-4. **Configure the database in `.env`:**
-```env
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=orb_dashboard
-DB_USERNAME=root
-DB_PASSWORD=your_password
-```
-
-5. **Run migrations and seed the database**
-```bash
-php artisan migrate
-php artisan db:seed --class=StockSeeder
-```
-
-6. **Start local development server**
-```bash
-php artisan serve
-```
-
-7. **Open in your browser**
-```
-http://localhost:8000/dashboard
+php artisan forecast:scan
+php artisan simulate:trades
 ```
 
 ---
 
-## 🧠 Features
+## 📊 URLs
 
-- ORB lifecycle tracking: forecast → breakout → retest → entry → exit
-- Forecast filter configuration with input forms
-- Live market data ready (mocked for now)
-- Modular views using Laravel Blade components
-- Tailwind CSS UI layout
+- `/dashboard` → Full ORB trading panel
+- `/explainer` → Definition and glossary of terms and filters
+- `/results` → Simulated trade history and performance
 
 ---
 
-## 📈 Roadmap
+## ✅ Status
 
-- Real-time data from Yahoo, TradingView, or Alpaca
-- User-based strategy profiles and settings
-- Signal alerts via webhook or notifications
-- Semi-automatic trading (Saxo Bank / Nordnet integrations)
-- Dashboard analytics and trade journaling
-
----
-
-## 🤝 Contributing
-
-Pull requests and issues are welcome.  
-Let’s build something powerful together!
-
----
-
-Made with ❤️ by Digitalsense + ChatGPT
+- [x] Forecast and Strategy Dashboard
+- [x] Forecast Settings UI
+- [x] Retest and Entry Simulation
+- [x] Results with Profit & Fees
+- [x] Cron Integration
+- [ ] Real Nordnet integration (planned)
+- [ ] Live chart embedding (planned)
