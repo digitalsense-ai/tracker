@@ -14,7 +14,7 @@ return new class extends Migration
             $table->float('gap');
             $table->float('rvol');
             $table->bigInteger('volume');
-            $table->string('status');
+            $table->string('status')->nullable()->default(null);
             $table->string('forecast');
             $table->timestamps();
         });

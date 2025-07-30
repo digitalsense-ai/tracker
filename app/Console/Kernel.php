@@ -7,6 +7,10 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
 {
+    protected $commands = [
+        \App\Console\Commands\SimulateTrades::class,
+    ];
+
     /**
      * Define the application's command schedule.
      */
@@ -16,6 +20,7 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->daily();
 
         $schedule->command('forecast:refresh')->everyFiveMinutes();
+        $schedule->command('simulate:trades')->dailyAt('15:40'); // fx 15:40 dansk tid
     }
 
     /**
