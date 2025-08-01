@@ -1,42 +1,42 @@
-
 <?php
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class BacktestController extends Controller
 {
     public function index()
     {
-        $tickers = ['AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMD'];
+        // Define test tickers
+        $tickers = ['AAPL', 'MSFT', 'TSLA'];
         $results = [];
 
+        // Define test settings
+        $minGap = 3.0;
+        $minRvol = 1.5;
+        $minVolume = 1000000;
+
         foreach ($tickers as $ticker) {
-            $url = 'https://finnhub.io/api/v1/stock/candle';
-            $params = [
-                'symbol' => $ticker,
-                'resolution' => '5',
-                'from' => strtotime('-5 days'),
-                'to' => time(),
-                'token' => env('FINNHUB_API_KEY')
+            // Fallback dummy data
+            $result = [
+                'ticker' => $ticker,
+                'date' => now()->toDateString(),
+                'gap' => rand(2, 6), // simulate 2–6% gap
+                'rvol' => rand(10, 30) / 10, // simulate 1.0–3.0 rvol
+                'volume' => rand(1000000, 5000000),
+                'forecast_type' => 'gap-up',
+                'status' => 'forecast',
             ];
 
-            $response = Http::get($url, $params);
-
-            if ($response->successful() && $response->json('s') === 'ok') {
-                $candles = $response->json();
-                $results[] = [
-                    'ticker' => $ticker,
-                    'status' => 'simulated',
-                    'entries' => count($candles['c'] ?? []),
-                    'close_price' => end($candles['c']),
-                    'gap_check' => round(rand(1, 5) + 1.5, 2),
-                    'rvol' => round(rand(10, 30) / 10, 2),
-                    'volume' => array_sum($candles['v'] ?? [])
-                ];
+            // Apply filters manually
+            if (
+                $result['gap'] >= $minGap &&
+                $result['rvol'] >= $minRvol &&
+                $result['volume'] >= $minVolume
+            ) {
+                $results[] = $result;
             }
         }
 
