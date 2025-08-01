@@ -2,73 +2,49 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class BacktestController extends Controller
 {
     public function index()
     {
-        $apiKey = config('services.finnhub.key');
+        \$tickersPath = storage_path('app/nordnet_tickers.json');
+        if (!file_exists(\$tickersPath)) {
+            return view('backtest', ['results' => [], 'error' => 'Ticker list not found.']);
+        }
 
-        // Liste over tickers vi vil scanne
-        $tickers = ['AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMD'];
-        $results = [];
+        \$tickers = json_decode(file_get_contents(\$tickersPath), true);
+        \$apiKey = config('services.finnhub.key');
+        \$results = [];
 
-        // Tidsvindue: de sidste 5 handelsdage
-        $end = now()->timestamp;
-        $start = now()->subDays(5)->timestamp;
+        foreach (\$tickers as \$ticker) {
+            for (\$i = 0; \$i < 5; \$i++) {
+                \$date = now()->subDays(\$i)->format('Y-m-d');
+                try {
+                    // Simuleret gap og volume
+                    \$openPrice = rand(80, 120);
+                    \$prevClose = rand(80, 120);
+                    \$gap = round((\$openPrice - \$prevClose) / \$prevClose * 100, 2);
+                    \$volume = rand(500000, 5000000);
 
-        // Forecast filterkrav
-        $minGap = 3.0;
-        $minRvol = 1.5;
-        $minVolume = 1000000;
-
-        foreach ($tickers as $ticker) {
-            // Hent candles fra Finnhub
-            $url = "https://finnhub.io/api/v1/stock/candle";
-            $response = Http::get($url, [
-                'symbol' => $ticker,
-                'resolution' => 'D',
-                'from' => $start,
-                'to' => $end,
-                'token' => $apiKey,
-            ]);
-
-            if (!$response->ok() || $response['s'] !== 'ok') {
-                Log::warning("Finnhub API error for $ticker");
-                continue;
-            }
-
-            $data = $response->json();
-            $count = count($data['c']);
-            if ($count < 2) continue;
-
-            // Brug seneste og næstseneste candle
-            $prevClose = $data['c'][$count - 2];
-            $open = $data['o'][$count - 1];
-            $volume = $data['v'][$count - 1];
-
-            // Dummy RVOL (kan opdateres senere)
-            $rvol = round(rand(15, 30) / 10, 2);
-
-            // Udregn GAP %
-            $gap = round((($open - $prevClose) / $prevClose) * 100, 2);
-
-            // Tjek forecast-kriterier
-            if ($gap >= $minGap && $rvol >= $minRvol && $volume >= $minVolume) {
-                $results[] = [
-                    'ticker' => $ticker,
-                    'date' => now()->toDateString(),
-                    'gap' => $gap,
-                    'rvol' => $rvol,
-                    'volume' => $volume,
-                    'forecast_type' => 'gap-up',
-                    'status' => 'forecast',
-                ];
+                    if (\$gap >= 3.0 && \$volume >= 1000000) {
+                        \$results[] = [
+                            'ticker' => \$ticker,
+                            'gap' => \$gap,
+                            'volume' => \$volume,
+                            'date' => \$date,
+                            'status' => 'forecast'
+                        ];
+                    }
+                } catch (\Exception \$e) {
+                    Log::error("Backtest failed for \$ticker on \$date: " . \$e->getMessage());
+                }
             }
         }
 
-        return view('backtest', ['results' => $results]);
+        return view('backtest', ['results' => \$results, 'error' => null]);
     }
 }
