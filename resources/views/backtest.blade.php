@@ -1,38 +1,60 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="max-w-7xl mx-auto py-6">
-    <h1 class="text-3xl font-bold mb-6">📉 Backtest Simulation</h1>
+<div class="container">
+    <h1 class="mb-4">Backtest Results</h1>
 
-    @if (!empty($results))
-        <table class="w-full text-sm table-auto border rounded shadow">
-            <thead class="bg-gray-100">
+    @if ($error)
+        <div class="alert alert-danger">{{ $error }}</div>
+    @endif
+
+    @if (count($results) === 0)
+        <p>No results available.</p>
+    @else
+        <table class="table table-striped">
+            <thead>
                 <tr>
-                    <th class="px-3 py-2 text-left">Ticker</th>
-                    <th class="px-3 py-2 text-left">Date</th>
-                    <th class="px-3 py-2 text-left">Gap %</th>
-                    <th class="px-3 py-2 text-left">RVOL</th>
-                    <th class="px-3 py-2 text-left">Volume</th>
-                    <th class="px-3 py-2 text-left">Forecast</th>
-                    <th class="px-3 py-2 text-left">Status</th>
+                    <th>Ticker</th>
+                    <th>Date</th>
+                    <th>Gap %</th>
+                    <th>Volume</th>
+                    <th>Entry</th>
+                    <th>SL</th>
+                    <th>TP1</th>
+                    <th>TP2</th>
+                    <th>TP3</th>
+                    <th>Exit</th>
+                    <th>Exit Type</th>
+                    <th>Win?</th>
+                    <th>Result (DKK)</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach ($results as $result)
-                    <tr class="border-b hover:bg-gray-50">
-                        <td class="px-3 py-2">{{ $result['ticker'] }}</td>
-                        <td class="px-3 py-2">{{ $result['date'] }}</td>
-                        <td class="px-3 py-2">{{ $result['gap'] }}%</td>
-                        <td class="px-3 py-2">{{ $result['rvol'] }}</td>
-                        <td class="px-3 py-2">{{ number_format($result['volume']) }}</td>
-                        <td class="px-3 py-2 capitalize">{{ $result['forecast_type'] }}</td>
-                        <td class="px-3 py-2 font-semibold text-green-600">{{ $result['status'] }}</td>
+                @foreach ($results as $trade)
+                    <tr>
+                        <td>{{ $trade->ticker }}</td>
+                        <td>{{ $trade->date }}</td>
+                        <td>{{ $trade->gap ?? '-' }}</td>
+                        <td>{{ $trade->volume ?? '-' }}</td>
+                        <td>{{ $trade->entry_price }}</td>
+                        <td>{{ $trade->sl_price }}</td>
+                        <td>{{ $trade->tp1_price }}</td>
+                        <td>{{ $trade->tp2_price }}</td>
+                        <td>{{ $trade->tp3_price }}</td>
+                        <td>{{ $trade->exit_price }}</td>
+                        <td>{{ strtoupper($trade->exit_type) }}</td>
+                        <td>
+                            @if ($trade->is_win)
+                                ✅
+                            @else
+                                ❌
+                            @endif
+                        </td>
+                        <td>{{ $trade->pnl_amount }} DKK</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
-    @else
-        <p class="text-gray-600">No backtest results found.</p>
     @endif
 </div>
 @endsection
