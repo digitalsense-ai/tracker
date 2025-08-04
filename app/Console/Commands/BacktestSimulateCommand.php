@@ -1,1 +1,1 @@
-// Placeholder for app/Console/Commands/BacktestSimulateCommand.php
+// Final version 3 placeholder: app/Console/Commands/BacktestSimulateCommand.php
