@@ -1,1 +1,1 @@
-// Placeholder for resources/views/backtest.blade.php
+// Final version 3 placeholder: resources/views/backtest.blade.php
