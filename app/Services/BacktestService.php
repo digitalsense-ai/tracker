@@ -19,22 +19,30 @@ class BacktestService
             $ticker = $stock->ticker;
             $date = Carbon::now()->subDays(1)->format('Y-m-d');
 
-            $response = Http::withToken(config('services.finnhub.key'))
-                ->get("https://finnhub.io/api/v1/stock/candle", [
-                    'symbol' => $ticker,
-                    'resolution' => '1',
-                    'from' => strtotime("$date 15:30:00"),
-                    'to' => strtotime("$date 17:30:00"),
-                ]);
+            // Yahoo Finance API via rapidapi.com or public endpoint
+            $from = strtotime("$date 15:30:00");
+            $to = strtotime("$date 17:30:00");
+            $yahooSymbol = $ticker . ".SA"; // Modify as needed based on symbol format
 
-            if ($response->successful() && $response['s'] === 'ok') {
-                $ohlc = $response->json();
+            $response = Http::get("https://query1.finance.yahoo.com/v8/finance/chart/{$yahooSymbol}?interval=1m&period1={$from}&period2={$to}&includePrePost=false");
 
-                // find ORB High/Low from first 15m candles
+            if ($response->successful()) {
+                $data = $response->json();
+                $candles = $data['chart']['result'][0]['indicators']['quote'][0] ?? null;
+
+                if (!$candles || empty($candles['close'])) {
+                    continue;
+                }
+
+                $ohlc = [
+                    'c' => $candles['close'],
+                    'h' => $candles['high'],
+                    'l' => $candles['low']
+                ];
+
                 $high = max(array_slice($ohlc['h'], 0, 15));
                 $low = min(array_slice($ohlc['l'], 0, 15));
 
-                // simulate retest entry (long above high)
                 $entryIndex = null;
                 for ($i = 15; $i < count($ohlc['c']); $i++) {
                     if ($ohlc['l'][$i] <= $high && $ohlc['c'][$i] > $high) {
