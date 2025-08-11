@@ -22,8 +22,10 @@ class BacktestService
             // Yahoo Finance API via rapidapi.com or public endpoint
             $from = strtotime("$date 15:30:00");
             $to = strtotime("$date 17:30:00");
-            $yahooSymbol = $ticker . ".SA"; // Modify as needed based on symbol format
+            $yahooSymbol = $ticker; // US tickers: no suffix. (DK: ".CO", SE: ".ST", etc.)
 
+            Log::info("Backtest: {$ticker} -> symbol={$yahooSymbol}");
+            
             $response = Http::get("https://query1.finance.yahoo.com/v8/finance/chart/{$yahooSymbol}?interval=1m&period1={$from}&period2={$to}&includePrePost=false");
 
             if ($response->successful()) {
