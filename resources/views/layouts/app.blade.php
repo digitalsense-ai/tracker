@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>@yield('title', 'ORB')</title>
     
-    @vite('resources/css/app.css') {{-- Loads Tailwind CSS via Vite --}}
+    @vite('resources/css/app.css') {{-- Loads Tailwind CSS via Vite --}}    
 
-    <!-- Bootstrap 5 CSS CDN -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    {{-- Optional custom styles --}}
+    @yield('style')
 </head>
 <body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col">
 
@@ -28,7 +28,7 @@
 
     @vite('resources/js/app.js') {{-- Optional: if you use JS --}}
 
-    <!-- Bootstrap 5 JS Bundle CDN (includes Popper) -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    {{-- Optional custom scripts --}}
+    @yield('scripts')
 </body>
 </html>

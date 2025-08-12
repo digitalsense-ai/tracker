@@ -1,5 +1,15 @@
 @extends('layouts.app')
 
+@section('style')
+<!-- Bootstrap 5 CSS CDN -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+@endsection
+
+@section('script')
+<!-- Bootstrap 5 JS Bundle CDN (includes Popper) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+@endsection
+
 @section('content')
 <div class="container">
   <h2>✔️ Simulated Trade Results</h2>
