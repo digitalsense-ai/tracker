@@ -58,4 +58,9 @@ return [
     // Datafeed source hint
     'datafeed' => 'yahoo', // or 'finnhub'
 
+    'risk_per_trade' => 0.01,
+    'stop_loss_atr_multiplier' => 1.5,
+    'take_profit_rr' => 2,
+    'max_trades_per_day' => 3,
+    'allow_retest_entries' => true,
 ];
