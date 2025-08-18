@@ -1,34 +1,23 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@yield('title', 'ORB')</title>
-    
-    @vite('resources/css/app.css') {{-- Loads Tailwind CSS via Vite --}}    
-
-    {{-- Optional custom styles --}}
-    @yield('style')
-</head>
-<body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col">
-
-    <header class="bg-blue-600 text-white p-4 shadow">
-        <div class="container mx-auto">
-            <h1 class="text-xl font-semibold">ORB Dashboard</h1>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trading UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="/dashboard">Tracker</a>
+        <div class="navbar-nav">
+          <a class="nav-link" href="/status">Status</a>
+          <a class="nav-link" href="/kpi">KPI</a>
+          <a class="nav-link" href="/explainer-flow">Explainer Flow</a>
+          <a class="nav-link" href="/results">Results</a>
+          <a class="nav-link" href="/backtest">Backtest</a>
         </div>
-    </header>
-
-    <main class="flex-grow container mx-auto px-4 py-6">
-        @yield('content')
-    </main>
-
-    <footer class="bg-white border-t text-center text-sm text-gray-500 py-4">
-        &copy; {{ date('Y') }} ORB
-    </footer>
-
-    @vite('resources/js/app.js') {{-- Optional: if you use JS --}}
-
-    {{-- Optional custom scripts --}}
-    @yield('scripts')
-</body>
+      </div>
+    </nav>
+    <main class="container">@yield('content')</main>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
 </html>
