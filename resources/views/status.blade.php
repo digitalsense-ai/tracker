@@ -1,46 +1,62 @@
 @extends('layouts.app')
+
 @section('content')
-<h2 class="mb-3">System Status</h2>
-<div class="row g-3">
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-header">Health</div>
-      <div class="card-body">
-        <ul class="list-group">
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            Datafeed <span class="badge bg-{{ $health['datafeed']['status'] === 'OK' ? 'success' : 'secondary' }}">{{ $health['datafeed']['status'] }}</span>
-          </li>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            Cron/Jobs <span class="badge bg-{{ $health['cron']['status'] === 'OK' ? 'success' : 'secondary' }}">{{ $health['cron']['status'] }}</span>
-          </li>
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            Broker <span class="badge bg-warning">NOT CONFIGURED</span>
-          </li>
-        </ul>
-        <small class="text-muted d-block mt-2">Last run (NY): {{ $health['cron']['last_run_ny'] ?? '-' }}</small>
+<div class="container py-4">
+  <h1 class="mb-4">System Status</h1>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card border-success">
+        <div class="card-body">
+          <h5 class="card-title">Datafeed</h5>
+          <span class="badge bg-success">OK</span>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="col-md-6">
-    <div class="card">
-      <div class="card-header">Active Strategy Config</div>
-      <div class="card-body">
-        <div class="row">
-          <div class="col-6"><strong>Range (min)</strong></div><div class="col-6">{{ $strategy['range_minutes'] }}</div>
-          <div class="col-6"><strong>Entry buffer %</strong></div><div class="col-6">{{ $strategy['entry_buffer_percent'] }}</div>
-          <div class="col-6"><strong>Require retest</strong></div><div class="col-6">{{ $strategy['require_retest'] ? 'Yes' : 'No' }}</div>
-          <div class="col-6"><strong>SL buffer %</strong></div><div class="col-6">{{ $strategy['sl_buffer_percent'] }}</div>
-          <div class="col-6"><strong>TP levels (R)</strong></div><div class="col-6">{{ implode(', ', $strategy['tp_levels'] ?? []) }}</div>
-          <div class="col-6"><strong>Trailing stop</strong></div><div class="col-6">{{ $strategy['enable_trailing_stop'] ? 'On' : 'Off' }}</div>
-          <div class="col-6"><strong>Session</strong></div><div class="col-6">{{ $strategy['session_start'] }}–{{ $strategy['session_end'] }}</div>
-          <div class="col-6"><strong>Position USD</strong></div><div class="col-6">{{ $strategy['position_usd'] }}</div>
-          <div class="col-6"><strong>Fees %</strong></div><div class="col-6">{{ $strategy['fee_percent'] }}</div>
-          <div class="col-6"><strong>Min fee</strong></div><div class="col-6">{{ $strategy['fee_min_per_order'] }}</div>
-          <div class="col-6"><strong>Datafeed</strong></div><div class="col-6">{{ strtoupper($strategy['datafeed']) }}</div>
-          <div class="col-6"><strong>Yahoo suffix order</strong></div><div class="col-6">{{ implode(', ', $strategy['yahoo_suffixes'] ?? []) }}</div>
+    <div class="col-md-4">
+      <div class="card border-success">
+        <div class="card-body">
+          <h5 class="card-title">Cron/Jobs</h5>
+          <span class="badge bg-success">OK</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-warning">
+        <div class="card-body">
+          <h5 class="card-title">Broker</h5>
+          <span class="badge bg-warning text-dark">NOT CONFIGURED</span>
         </div>
       </div>
     </div>
   </div>
+
+  <h4 class="mt-3">Active Strategy Config</h4>
+  @php
+    $cfg = $config ?? [
+      'range_minutes' => env('STRATEGY_RANGE_MINUTES', 15),
+      'require_retest' => env('STRATEGY_REQUIRE_RETEST', true),
+      'session_start' => env('STRATEGY_SESSION_START', '09:30'),
+      'session_end'   => env('STRATEGY_SESSION_END', '16:00'),
+      'position_usd'  => env('STRATEGY_POSITION_USD', 1000),
+      'fee_percent'   => env('STRATEGY_FEE_PERCENT', 0.001),
+      'fee_min'       => env('STRATEGY_FEE_MIN_PER_ORDER', 2),
+      'entry_buffer_percent' => env('STRATEGY_ENTRY_BUFFER_PERCENT', 0.0),
+      'sl_buffer_percent'    => env('STRATEGY_SL_BUFFER_PERCENT', 0.0),
+    ];
+    $feePctDisplay = number_format($cfg['fee_percent'] * 100, 3) . ' %';
+  @endphp
+
+  <table class="table table-sm mt-2 w-auto">
+    <tr><th>Opening Range (min)</th><td>{{ $cfg['range_minutes'] }}</td></tr>
+    <tr><th>Require Retest</th><td>{{ $cfg['require_retest'] ? 'Yes' : 'No' }}</td></tr>
+    <tr><th>Session</th><td>{{ $cfg['session_start'] }} - {{ $cfg['session_end'] }}</td></tr>
+    <tr><th>Position (USD)</th><td>${{ number_format((float)$cfg['position_usd'], 2) }}</td></tr>
+    <tr><th>Fees</th><td>{{ $feePctDisplay }} (min ${{ number_format((float)$cfg['fee_min'],2) }})</td></tr>
+    <tr><th>Entry Buffer</th><td>{{ number_format((float)$cfg['entry_buffer_percent'], 3) }} %</td></tr>
+    <tr><th>SL Buffer</th><td>{{ number_format((float)$cfg['sl_buffer_percent'], 3) }} %</td></tr>
+  </table>
+
+  <p class="text-muted">Note: Fee percent expects a <em>fraction</em> (e.g. 0.001 = 0.1%).</p>
 </div>
 @endsection

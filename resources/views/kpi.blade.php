@@ -1,45 +1,64 @@
 @extends('layouts.app')
+
 @section('content')
-<h2 class="mb-3">KPIs</h2>
-<form class="row g-2 mb-3" method="get">
-  <div class="col-md-3">
-    <label class="form-label">From</label>
-    <input type="date" class="form-control" name="from" value="{{ $from }}">
+<div class="container py-4">
+  <h1 class="mb-3">KPIs</h1>
+
+  @php
+    $trades = collect($trades ?? []);
+    $closed = $trades->filter(function($t){
+      return in_array($t->status ?? '', ['closed','SL','TP1','TP2'])
+          && is_numeric($t->entry_price ?? null)
+          && is_numeric($t->sl_price ?? null)
+          && ($t->entry_price > $t->sl_price)
+          && is_numeric($t->exit_price ?? null);
+    });
+
+    $winCount = $closed->filter(fn($t) => ($t->exit_price > $t->entry_price))->count();
+    $tradeCount = $closed->count();
+    $winRate = $tradeCount ? round(100 * $winCount / $tradeCount, 1) : 0;
+
+    $avgR = $tradeCount ? round($closed->avg(function($t){
+      $risk = ($t->entry_price - $t->sl_price);
+      if ($risk <= 0) return null;
+      return ($t->exit_price - $t->entry_price) / $risk;
+    }), 3) : 0;
+
+    $netSum = round($trades->sum(fn($t) => (float)($t->net_profit ?? 0)), 2);
+  @endphp
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Trades (closed)</div><div class="fs-4 fw-bold">{{ $tradeCount }}</div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Win rate</div><div class="fs-4 fw-bold">{{ $winRate }}%</div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Avg R</div><div class="fs-4 fw-bold">{{ $avgR }}</div></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted">Net Profit (all)</div><div class="fs-4 fw-bold">${{ number_format($netSum, 2) }}</div></div></div></div>
   </div>
-  <div class="col-md-3">
-    <label class="form-label">To</label>
-    <input type="date" class="form-control" name="to" value="{{ $to }}">
+
+  <h5 class="mb-2">Trades in scope</h5>
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th><th>Ticker</th><th>Entry</th><th>SL</th><th>Exit</th><th>Status</th><th>Fees</th><th>Net</th>
+        </tr>
+      </thead>
+      <tbody>
+        @forelse($trades as $t)
+          <tr>
+            <td>{{ $t->date ?? '-' }}</td>
+            <td>{{ $t->ticker ?? '-' }}</td>
+            <td>{{ is_numeric($t->entry_price ?? null) ? number_format($t->entry_price,2) : '−' }}</td>
+            <td>{{ is_numeric($t->sl_price ?? null) ? number_format($t->sl_price,2) : '−' }}</td>
+            <td>{{ is_numeric($t->exit_price ?? null) ? number_format($t->exit_price,2) : '−' }}</td>
+            <td>{{ $t->status ?? '-' }}</td>
+            <td>{{ is_numeric($t->fees ?? null) ? '$'.number_format($t->fees,2) : '−' }}</td>
+            <td>{{ is_numeric($t->net_profit ?? null) ? '$'.number_format($t->net_profit,2) : '−' }}</td>
+          </tr>
+        @empty
+          <tr><td colspan="8" class="text-center text-muted">No trades</td></tr>
+        @endforelse
+      </tbody>
+    </table>
   </div>
-  <div class="col-md-3">
-    <label class="form-label">Ticker</label>
-    <input type="text" class="form-control" name="ticker" value="{{ $ticker }}" placeholder="e.g. AAPL">
-  </div>
-  <div class="col-md-3 d-flex align-items-end">
-    <button class="btn btn-primary w-100">Apply</button>
-  </div>
-</form>
-<div class="row g-3 mb-3">
-  <div class="col-md-3"><div class="card"><div class="card-body"><div class="fw-bold">Trades</div><div class="fs-4">{{ $count }}</div></div></div></div>
-  <div class="col-md-3"><div class="card"><div class="card-body"><div class="fw-bold">Win rate</div><div class="fs-4">{{ $winrate !== null ? $winrate.'%' : '-' }}</div></div></div></div>
-  <div class="col-md-3"><div class="card"><div class="card-body"><div class="fw-bold">Avg R</div><div class="fs-4">{{ $avgR ?? '-' }}</div></div></div></div>
-  <div class="col-md-3"><div class="card"><div class="card-body"><div class="fw-bold">Net Profit</div><div class="fs-4">{{ number_format($sumNet, 2) }}</div></div></div></div>
-</div>
-<div class="table-responsive">
-  <table class="table table-sm table-striped">
-    <thead><tr><th>Date</th><th>Ticker</th><th>Entry</th><th>SL</th><th>Exit</th><th>Status</th><th>Net</th></tr></thead>
-    <tbody>
-      @foreach($rows as $r)
-      <tr>
-        <td>{{ $r->date }}</td>
-        <td>{{ $r->ticker }}</td>
-        <td>{{ $r->entry_price }}</td>
-        <td>{{ $r->sl_price }}</td>
-        <td>{{ $r->exit_price }}</td>
-        <td>{{ $r->status }}</td>
-        <td>{{ $r->net_profit }}</td>
-      </tr>
-      @endforeach
-    </tbody>
-  </table>
 </div>
 @endsection
