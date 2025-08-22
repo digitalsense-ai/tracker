@@ -43,7 +43,8 @@
         <td>{{ number_format($r['sl'] ?? $r['sl_price'] ?? 0,2) }}</td>
         <td>{{ isset($r['tp1']) ? number_format($r['tp1'],2) : '—' }}</td>
         <td>{{ isset($r['tp2']) ? number_format($r['tp2'],2) : '—' }}</td>
-        <td>{{ isset($r['exit'] ?? $r['exit_price']) ? number_format($r['exit'] ?? $r['exit_price'],2) : '—' }}</td>
+        {{--<td>{{ isset($r['exit'] ?? $r['exit_price']) ? number_format($r['exit'] ?? $r['exit_price'],2) : '—' }}</td>--}}
+        <td>{{ isset($r['exit']) || isset($r['exit_price']) ? number_format($r['exit'] ?? $r['exit_price'], 2) : '—' }}</td>
         <td>
           @if(($r['status'] ?? '')==='SL') <span class="badge badge-sl">SL</span>
           @elseif(in_array(($r['status'] ?? ''),['TP1','TP2'])) <span class="badge badge-tp">{{ $r['status'] }}</span>
