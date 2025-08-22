@@ -9,6 +9,7 @@ use App\Http\Controllers\StatusController;
 use App\Http\Controllers\KpiController;
 use App\Http\Controllers\ExplainerFlowController;
 use App\Http\Controllers\SignalsController;
+use App\Http\Controllers\SettingsController;
 
 Route::get('/', function () {
     return redirect('/dashboard');
@@ -29,4 +30,5 @@ Route::get('/explainer-flow', [ExplainerFlowController::class, 'index'])->name('
 
 Route::get('/signals', [SignalsController::class, 'index'])->name('signals');
 
-//Route::post('/settings', [SignalsController::class, 'index'])->name('settings');
+Route::get('/settings', [SettingsController::class, 'index'])->name('settings');
+Route::post('/settings', [SettingsController::class, 'store'])->name('settings.store');
