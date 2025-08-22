@@ -8,19 +8,25 @@ use App\Http\Controllers\BacktestController;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\KpiController;
 use App\Http\Controllers\ExplainerFlowController;
+use App\Http\Controllers\SignalsController;
 
 Route::get('/', function () {
     return redirect('/dashboard');
 });
 
+Route::get('/status', [StatusController::class, 'index'])->name('status');
+
 Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-Route::get('/explainer', [ExplainerController::class, 'index'])->name('explainer');
+Route::get('/kpi', [KpiController::class, 'index'])->name('kpi');
 
 Route::get('/results', [TradeResultController::class, 'index'])->name('results');
 
 Route::get('/backtest', [BacktestController::class, 'index'])->name('backtest');
 
-Route::get('/status', [StatusController::class, 'index'])->name('status');
-Route::get('/kpi', [KpiController::class, 'index'])->name('kpi');
+Route::get('/explainer', [ExplainerController::class, 'index'])->name('explainer');
 Route::get('/explainer-flow', [ExplainerFlowController::class, 'index'])->name('explainer.flow');
+
+Route::get('/signals', [SignalsController::class, 'index'])->name('signals');
+
+//Route::post('/settings', [SignalsController::class, 'index'])->name('settings');

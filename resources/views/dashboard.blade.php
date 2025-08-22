@@ -1,99 +1,77 @@
 @extends('layouts.app')
-
+@section('title','Dashboard')
 @section('content')
-<div class="container py-4">
-  <h1 class="mb-3">Dashboard</h1>
-  <p class="text-muted">Window: {{ $from }} → {{ $to }} (approx. last 5 trading days)</p>
+<h1 class="mb-3">Dashboard</h1>
+<p class="text-muted">Window: {{ $from ?? '' }} → {{ $to ?? '' }} (approx. last 5 trading days)</p>
 
-  <div class="row g-3 mb-3">
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Trades today (closed)</div>
-      <div class="display-6 fw-bold">{{ $todayTrades }}</div>
-    </div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Open now</div>
-      <div class="display-6 fw-bold">{{ $openTrades }}</div>
-    </div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Win rate (5d)</div>
-      <div class="display-6 fw-bold">{{ $winRate5d }}%</div>
-    </div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Avg R (5d)</div>
-      <div class="display-6 fw-bold">{{ $avgR5d }}</div>
-    </div></div></div>
-  </div>
+@php $cur = $currency ?? 'kr'; @endphp
+<div class="row g-3">
+  <div class="col-md-3"><div class="card p-3"><small>Trades today (closed)</small><h2>{{ $todayTrades ?? 0 }}</h2></div></div>
+  <div class="col-md-3"><div class="card p-3"><small>Open now</small><h2>{{ $openTrades ?? 0 }}</h2></div></div>
+  <div class="col-md-3"><div class="card p-3"><small>Win rate (5d)</small><h2>{{ number_format($winRate5d ?? 0,1) }}%</h2></div></div>
+  <div class="col-md-3"><div class="card p-3"><small>Avg R (5d)</small><h2>{{ number_format($avgR5d ?? 0,2) }}</h2></div></div>
+</div>
 
-  <div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Net (5d)</div>
-      <div class="display-6 fw-bold">${{ number_format($net5d,2) }}</div>
-    </div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Fees (5d)</div>
-      <div class="display-6 fw-bold">${{ number_format($fees5d,2) }}</div>
-    </div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">Profit factor (5d)</div>
-      <div class="display-6 fw-bold">{{ is_infinite($profitFactor5d) ? '∞' : $profitFactor5d }}</div>
-    </div></div></div>
-    <div class="col-md-3"><div class="card h-100"><div class="card-body">
-      <div class="text-muted">TP / SL hit (5d)</div>
-      <div class="display-6 fw-bold">{{ $tpRate5d }}% / {{ $slRate5d }}%</div>
-    </div></div></div>
-  </div>
+<div class="row g-3 mt-1">
+  <div class="col-md-3"><div class="card p-3"><small>Net (5d)</small><h2 class="{{ ($net5d ?? 0)>=0 ? 'money-pos':'money-neg' }}">{{ $cur }} {{ number_format($net5d ?? 0,2) }}</h2></div></div>
+  <div class="col-md-3"><div class="card p-3"><small>Fees (5d)</small><h2>{{ $cur }} {{ number_format($fees5d ?? 0,2) }}</h2></div></div>
+  <div class="col-md-3"><div class="card p-3"><small>Profit factor (5d)</small><h2>{{ is_infinite($profitFactor5d ?? 0) ? '∞' : number_format($profitFactor5d ?? 0,2) }}</h2></div></div>
+  <div class="col-md-3"><div class="card p-3"><small>TP / SL hit (5d)</small><h2>{{ number_format($tpRate5d ?? 0,1) }}% / {{ number_format($slRate5d ?? 0,1) }}%</h2></div></div>
+</div>
 
-  @if($best || $worst)
-  <hr class="my-3">
-  <h5>Best / Worst (5d)</h5>
-  <ul>
-    @if($best)<li><strong>Best:</strong> {{ $best->ticker }} — ${{ number_format($best->net_profit,2) }} ({{ $best->date }})</li>@endif
-    @if($worst)<li><strong>Worst:</strong> {{ $worst->ticker }} — ${{ number_format($worst->net_profit,2) }} ({{ $worst->date }})</li>@endif
-  </ul>
-  @endif
+<h5 class="mt-4">Best / Worst (5d)</h5>
+<ul>
+  <li>Best: {{ $best->ticker ?? '-' }} {{ $cur }} {{ number_format($best->net_profit ?? 0,2) }}</li>
+  <li>Worst: {{ $worst->ticker ?? '-' }} {{ $cur }} {{ number_format($worst->net_profit ?? 0,2) }}</li>
+</ul>
 
-  <hr class="my-3">
-  <h5>Recent 10 trades</h5>
-  <div class="table-responsive">
-    <table class="table table-sm table-striped">
-      <thead><tr><th>Date</th><th>Ticker</th><th>Status</th><th>Entry</th><th>SL</th><th>Exit</th><th>Net</th></tr></thead>
-      <tbody>
-        @forelse($recent as $t)
-          <tr>
-            <td>{{ $t->date }}</td>
-            <td>{{ $t->ticker }}</td>
-            <td>{{ $t->status }}</td>
-            <td>{{ is_numeric($t->entry_price) ? number_format($t->entry_price,2) : '—' }}</td>
-            <td>{{ is_numeric($t->sl_price) ? number_format($t->sl_price,2) : '—' }}</td>
-            <td>{{ is_numeric($t->exit_price) ? number_format($t->exit_price,2) : '—' }}</td>
-            <td>{{ is_numeric($t->net_profit) ? '$'.number_format($t->net_profit,2) : '—' }}</td>
-          </tr>
-        @empty
-          <tr><td colspan="7" class="text-muted">No trades yet</td></tr>
-        @endforelse
-      </tbody>
-    </table>
-  </div>
+<h5 class="mt-4">Recent 10 trades</h5>
+<div class="table-responsive">
+<table class="table table-sm table-striped">
+  <thead><tr><th>Date</th><th>Ticker</th><th>Status</th><th>Entry</th><th>SL</th><th>Exit</th><th>Net</th></tr></thead>
+  <tbody>
+  @forelse(($recent ?? []) as $t)
+    <tr>
+      <td>{{ $t->date ?? '-' }}</td>
+      <td>{{ $t->ticker ?? '-' }}</td>
+      <td>
+        @if(($t->status ?? '')==='SL') <span class="badge badge-sl">SL</span>
+        @elseif(in_array(($t->status ?? ''),['TP1','TP2'])) <span class="badge badge-tp">{{ $t->status }}</span>
+        @else <span class="badge bg-secondary">{{ $t->status ?? '-' }}</span>
+        @endif
+      </td>
+      <td>{{ is_numeric($t->entry_price ?? null) ? number_format($t->entry_price,2) : '—' }}</td>
+      <td>{{ is_numeric($t->sl_price ?? null) ? number_format($t->sl_price,2) : '—' }}</td>
+      <td>{{ is_numeric($t->exit_price ?? null) ? number_format($t->exit_price,2) : '—' }}</td>
+      <td class="{{ ($t->net_profit ?? 0)>=0 ? 'money-pos':'money-neg' }}">{{ $cur }} {{ number_format($t->net_profit ?? 0,2) }}</td>
+    </tr>
+  @empty
+    <tr><td colspan="7" class="text-muted">No trades.</td></tr>
+  @endforelse
+  </tbody>
+</table>
+</div>
 
-  @if($perTicker && count($perTicker))
-  <hr class="my-3">
-  <h5>By Ticker (5d)</h5>
-  <div class="row g-3">
-    @foreach($perTicker as $sym => $m)
-    <div class="col-md-4">
-      <div class="card h-100"><div class="card-body">
-        <div class="fw-bold">{{ $sym }}</div>
-        <div class="small text-muted">{{ $m['trades'] }} trades · Win {{ $m['winRate'] }}%</div>
-        <div class="fs-5">@if($m['net']>=0)+@endif${{ number_format($m['net'],2) }}</div>
-      </div></div>
+@if(($perTicker ?? null) && count($perTicker))
+<h5 class="mt-4">By Ticker (5d)</h5>
+<div class="row g-3">
+@foreach($perTicker as $sym => $m)
+  <div class="col-md-4">
+    <div class="card p-3">
+      <div class="d-flex justify-content-between">
+        <strong>{{ $sym }}</strong>
+        <span class="{{ ($m['net'] ?? 0)>=0 ? 'money-pos':'money-neg' }}">{{ $cur }} {{ number_format($m['net'] ?? 0,2) }}</span>
+      </div>
+      <small class="text-muted">{{ $m['trades'] ?? 0 }} trades · Win {{ number_format($m['winRate'] ?? 0,1) }}%</small>
     </div>
-    @endforeach
   </div>
-  @endif
+@endforeach
+</div>
+@endif
 
-  <hr class="my-4">
-  <a class="btn btn-outline-primary me-2" href="{{ url('/kpi') }}">Open KPI</a>
-  <a class="btn btn-outline-secondary me-2" href="{{ url('/results') }}">Open Results</a>
-  <a class="btn btn-outline-dark" href="{{ url('/explainer-flow') }}">Open Explainer Flow</a>
+<div class="mt-4 d-flex gap-2">
+  <a class="btn btn-outline-primary btn-sm" href="/kpi">Open KPI</a>
+  <a class="btn btn-outline-secondary btn-sm" href="/results">Open Results</a>
+  <a class="btn btn-outline-dark btn-sm" href="/explainer-flow">Open Explainer Flow</a>
 </div>
 @endsection
