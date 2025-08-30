@@ -30,5 +30,5 @@ Route::get('/explainer-flow', [ExplainerFlowController::class, 'show'])->name('e
 
 Route::get('/signals', [SignalsController::class, 'index'])->name('signals');
 
-Route::get('/settings',  [SettingsController::class, 'index'])->name('settings');
-Route::post('/settings', [SettingsController::class, 'store'])->name('settings.store');
+Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
