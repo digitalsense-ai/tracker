@@ -1,7 +1,23 @@
+
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Signals</title>
-<style>body{font-family:ui-monospace,Consolas,Monaco,monospace;background:#0b0f17;color:#e8eefc;padding:16px}pre{white-space:pre-wrap;background:#121826;border:1px solid #243049;border-radius:10px;padding:16px}</style>
-</head><body>
-<label><input type="checkbox" onclick="location.search=this.checked?'?pretty=0':'?pretty=1'"> Flot udskrift</label>
-<pre>{{ $json }}</pre>
-</body></html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Signals</title>
+  <link rel="stylesheet" href="{{ asset('css/tracker-theme.css') }}">
+</head>
+<body class="tracker">
+  <div class="container">
+    <div class="header">
+      <h1>Signals</h1>
+      <x-summary-bar :items="[
+        ['label'=>'Status','value'=>$status ?? 'ok','type'=>($status ?? 'ok')==='ok'?'win':'warn'],
+        ['label'=>'Count','value'=>isset($signals)?count($signals):0,'type'=>'info'],
+      ]" />
+    </div>
+    <div class="card" style="padding:16px;white-space:pre-wrap;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+      {!! $prettyJson !!}
+    </div>
+  </div>
+</body>
+</html>

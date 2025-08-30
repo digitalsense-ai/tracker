@@ -1,0 +1,45 @@
+
+:root{
+  --bg:#0b0f17;
+  --card:#121826;
+  --text:#e8eefc;
+  --muted:#8aa0c6;
+  --green:#29c077;
+  --red:#ff5a5f;
+  --amber:#ffb020;
+  --blue:#5aa3ff;
+  --border:#243049;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body.tracker{
+  background: radial-gradient(1000px 600px at 10% -10%, #172033, #0b0f17 60%);
+  color:var(--text);
+}
+.tracker .container{max-width:1140px;margin:32px auto;padding:0 16px}
+.tracker .card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+.tracker .grid{display:grid;gap:12px}
+.tracker .grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1000px){.tracker .grid.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.tracker .grid.cols-4{grid-template-columns:repeat(1,minmax(0,1fr))}}
+.tracker .pill{background:var(--card);color:var(--muted);border:1px solid var(--border);padding:10px 14px;border-radius:999px;font-size:13px;display:inline-flex;gap:8px;align-items:center}
+.tracker .pill strong{color:var(--text)}
+.tracker .pill.win strong{color:var(--green)}
+.tracker .pill.loss strong{color:var(--red)}
+.tracker .pill.info strong{color:var(--blue)}
+.tracker .pill.warn strong{color:var(--amber)}
+.tracker .badge{padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);color:var(--text);display:inline-block}
+.tracker .badge.win{background:rgba(41,192,119,.12);border-color:rgba(41,192,119,.25)}
+.tracker .badge.loss{background:rgba(255,90,95,.12);border-color:rgba(255,90,95,.25)}
+.tracker .badge.open{background:rgba(255,176,32,.12);border-color:rgba(255,176,32,.25)}
+.tracker table{width:100%;border-collapse:collapse}
+.tracker thead th{ text-align:left;font-weight:600;font-size:13px;padding:12px 14px;color:var(--muted);background:#0f1626;border-bottom:1px solid var(--border)}
+.tracker tbody td{ padding:12px 14px;border-bottom:1px solid var(--border);font-size:14px}
+.tracker tbody tr:last-child td{border-bottom:none}
+.tracker .row-win [data-pnl]{color:var(--green);font-weight:600}
+.tracker .row-loss [data-pnl]{color:var(--red);font-weight:600}
+.tracker .side.long{color:var(--green);font-weight:600}
+.tracker .side.short{color:var(--red);font-weight:600}
+.tracker .toolbar{display:flex;gap:10px;flex-wrap:wrap}
+.tracker .header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+.tracker h1,.tracker h2{margin:0 0 10px 0}
