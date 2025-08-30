@@ -10,6 +10,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         \App\Console\Commands\SimulateTrades::class,
         \App\Console\Commands\BacktestGridCommand::class,
+        \App\Console\Commands\SimulateV5::class,
     ];
 
     /**

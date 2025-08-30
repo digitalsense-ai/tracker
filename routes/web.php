@@ -26,7 +26,7 @@ Route::get('/results', [TradeResultController::class, 'index'])->name('results')
 Route::get('/backtest', [BacktestController::class, 'index'])->name('backtest');
 
 Route::get('/explainer', [ExplainerController::class, 'index'])->name('explainer');
-Route::get('/explainer-flow', [ExplainerFlowController::class, 'index'])->name('explainer.flow');
+Route::get('/explainer-flow', [ExplainerFlowController::class, 'show'])->name('explainer.flow');
 
 Route::get('/signals', [SignalsController::class, 'index'])->name('signals');
 
