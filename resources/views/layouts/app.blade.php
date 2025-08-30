@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>@yield('title','Tracker')</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
     .kpi-card h2{font-size:1.8rem;margin:0}
     .kpi-card small{color:#6c757d}
@@ -13,9 +13,10 @@
     .badge-tp{background:#198754}
     .badge-sl{background:#dc3545}
     .table thead th{white-space:nowrap}
-  </style>
+  </style> -->
+  <link rel="stylesheet" href="{{ asset('css/tracker-theme.css') }}">
 </head>
-<body>
+<body class="tracker">
 <nav class="navbar navbar-expand-lg bg-light border-bottom">
   <div class="container-fluid">
     <a class="navbar-brand" href="/dashboard">Tracker</a>
@@ -36,6 +37,6 @@
 <main class="container my-4">
 @yield('content')
 </main>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script> -->
 </body>
 </html>
