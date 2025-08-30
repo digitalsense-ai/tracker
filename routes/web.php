@@ -10,6 +10,7 @@ use App\Http\Controllers\KpiController;
 use App\Http\Controllers\ExplainerFlowController;
 use App\Http\Controllers\SignalsController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\ProfilesController;
 
 Route::get('/', function () {
     return redirect('/dashboard');
@@ -32,3 +33,6 @@ Route::get('/signals', [SignalsController::class, 'index'])->name('signals');
 
 Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+Route::get('/profiles',[ProfilesController::class,'index'])->name('profiles.index');
+Route::get('/profiles/{id}',[ProfilesController::class,'show'])->name('profiles.show');
