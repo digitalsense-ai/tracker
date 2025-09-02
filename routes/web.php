@@ -38,3 +38,5 @@ Route::post('/settings', [SettingsController::class, 'update'])->name('settings.
 Route::get('/profiles',[ProfilesController::class,'index'])->name('profiles.index');
 Route::get('/profiles/{id}',[ProfilesController::class,'show'])->name('profiles.show');
 Route::get('/profiles/run', [ProfilesRunController::class, 'run'])->name('profiles.run');
+
+Route::get('/signals-pretty', fn() => view('signals.pretty'))->name('signals.pretty');
