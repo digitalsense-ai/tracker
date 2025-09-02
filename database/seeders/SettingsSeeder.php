@@ -42,5 +42,7 @@ class SettingsSeeder extends Seeder
         $svc->set('management.use_trailing', true, 'bool', 'management', 'Use Trailing');
         $svc->set('management.trailing_mult', 1.5, 'float', 'management', 'Trailing ATR(5)×');
         $svc->set('management.cooldown_after_sl', true, 'bool', 'management', 'Cooldown after SL');
+
+        $svc->set('ui.theme','light','string','ui','Theme (light|dark)', ['options'=>['light','dark']]);
     }
 }

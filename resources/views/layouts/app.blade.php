@@ -13,8 +13,9 @@
     .badge-tp{background:#198754}
     .badge-sl{background:#dc3545}
     .table thead th{white-space:nowrap}
-  </style> -->
-  <link rel="stylesheet" href="{{ asset('css/tracker-theme.css') }}">
+  </style>
+  <link rel="stylesheet" href="{{ asset('css/tracker-theme.css') }}"> -->
+  @include('layouts.partials.theme')
 </head>
 <body class="tracker">
 <nav class="navbar navbar-expand-lg bg-light border-bottom">

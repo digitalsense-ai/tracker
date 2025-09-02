@@ -11,6 +11,7 @@ use App\Http\Controllers\ExplainerFlowController;
 use App\Http\Controllers\SignalsController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ProfilesController;
+use App\Http\Controllers\ProfilesRunController;
 
 Route::get('/', function () {
     return redirect('/dashboard');
@@ -36,3 +37,4 @@ Route::post('/settings', [SettingsController::class, 'update'])->name('settings.
 
 Route::get('/profiles',[ProfilesController::class,'index'])->name('profiles.index');
 Route::get('/profiles/{id}',[ProfilesController::class,'show'])->name('profiles.show');
+Route::get('/profiles/run', [ProfilesRunController::class, 'run'])->name('profiles.run');
