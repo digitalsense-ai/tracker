@@ -4,16 +4,14 @@ namespace App\Console\Commands;
 use Illuminate\Console\Command;
 use App\Models\StrategyProfile;
 use App\Models\ProfileResult;
-use App\Services\BacktestService;
+use App\Support\BacktestShim;
 use Carbon\Carbon;
 use Throwable;
 
 class ProfilesBacktestHotfix extends Command
 {
     protected $signature = 'profiles:backtest-v2 {--days=10} {--limit=0} {--profile=} {--vv}';
-    protected $description = 'Batch backtest with robust BacktestService fallbacks + logging';
-
-    public function __construct(protected BacktestService $svc){ parent::__construct(); }
+    protected $description = 'Batch backtest using BacktestShim + logging';
 
     public function handle(): int
     {
@@ -35,8 +33,8 @@ class ProfilesBacktestHotfix extends Command
 
         foreach($profiles as $p){
             try{
-                $res=$this->runService($start,$days,$p->settings,$verbose);
-                $metrics=$this->computeMetrics($res);
+                $trades = BacktestShim::run($start,$days,$p->settings,$verbose);
+                $metrics=$this->computeMetrics($trades);
                 $metrics['window']=$window;
                 if($verbose){
                     $this->line(sprintf("\n#%d %s → trades=%d win%%=%.1f net=%.2f pf=%.2f",
@@ -70,22 +68,11 @@ class ProfilesBacktestHotfix extends Command
         return self::SUCCESS;
     }
 
-    protected function runService($start,$days,array $settings,bool $verbose=false){
-        try{ return $this->svc->simulateForDate($start,$days,['profile_settings'=>$settings]); }
-        catch(\Throwable $e){ if($verbose){ $this->warn('simulateForDate failed: '.$e->getMessage()); } }
-        try{ return $this->svc->simulate($days,['profile_settings'=>$settings,'start'=>$start]); }
-        catch(\Throwable $e){ if($verbose){ $this->warn('simulate failed: '.$e->getMessage()); } }
-        try{ $end=(clone $start)->addDays($days); return $this->svc->simulateRange($start,$end,['profile_settings'=>$settings]); }
-        catch(\Throwable $e){ if($verbose){ $this->warn('simulateRange failed: '.$e->getMessage()); } }
-        throw new \RuntimeException('No compatible simulate* method found in BacktestService.');
-    }
-
-    protected function computeMetrics($res): array
+    protected function computeMetrics(array $trades): array
     {
-        $trades = is_array($res) ? ($res['trades'] ?? $res) : [];
         $n=0;$wins=0;$net=0;$gp=0;$gn=0;$r_sum=0;$r_cnt=0;$eq=0;$pk=0;$dd=0;
         foreach($trades as $t){
-            $n++; $p=(float)($t['net'] ?? ($t['pnl'] ?? 0)); $r=$t['R'] ?? ($t['r'] ?? null);
+            $n++; $p=(float)($t['net'] ?? 0); $r=$t['R'] ?? ($t['r'] ?? null);
             if($r!==null){ $r_sum+=(float)$r; $r_cnt++; }
             $net+=$p; if($p>=0){$wins++;$gp+=$p;} else {$gn+=abs($p);}
             $eq+=$p; $pk=max($pk,$eq); $dd=max($dd,$pk>0?($pk-$eq)/$pk:0);
