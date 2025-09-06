@@ -1,3 +1,10 @@
+#!/bin/bash
+set -e
+mkdir -p app/Support
+if [ -f app/Services/BacktestShim.php ]; then
+  mv app/Services/BacktestShim.php app/Support/BacktestShim.php
+fi
+cat > app/Support/BacktestShim.php <<'PHP'
 <?php
 namespace App\Support;
 
@@ -87,3 +94,19 @@ class BacktestShim
         return [];
     }
 }
+
+PHP
+
+append_if_missing () {
+  local file="routes/web.php"
+  local require_line="$1"
+  grep -qF "$require_line" "$file" || echo "$require_line" >> "$file"
+}
+append_if_missing "require base_path('routes/web.signals_pretty.php');"
+append_if_missing "require base_path('routes/web.profiles_run.php');"
+append_if_missing "require base_path('routes/web.profiles_diag.php');"
+
+composer dump-autoload -q || true
+php artisan route:clear || true
+
+echo "✅ Applied PSR-4 + routes fixes."
