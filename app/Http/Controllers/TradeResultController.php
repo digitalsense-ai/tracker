@@ -35,7 +35,9 @@ class TradeResultController extends Controller
             'net'      => $net,
         ];
 
-        $currency = Cfg::get('CURRENCY','kr');
+        //$currency = Cfg::get('CURRENCY','kr');
+        $S = app(\App\Services\SettingsService::class);
+        $currency = $S->get('CURRENCY','kr');
 
         if ($r->boolean('export')) {
             $csv = "date,ticker,status,entry,sl,exit,fees,net\n";

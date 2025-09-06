@@ -10,8 +10,8 @@ use Throwable;
 
 class ProfilesBacktestHotfix extends Command
 {
-    protected $signature = 'profiles:backtest-v2 {--days=10} {--limit=0} {--profile=} {--vv}';
-    protected $description = 'Batch backtest using BacktestShim + logging';
+    protected $signature = 'profiles:backtest-hotfix {--days=10} {--limit=0} {--profile=} {--vv}';
+    protected $description = 'Batch backtest using BacktestShim + logging (hotfix with --days support)';
 
     public function handle(): int
     {
@@ -33,7 +33,7 @@ class ProfilesBacktestHotfix extends Command
 
         foreach($profiles as $p){
             try{
-                $trades = BacktestShim::run($start,$days,$p->settings,$verbose);
+                $trades = BacktestShim::run($start,$days,$p->settings ?? [],$verbose);
                 $metrics=$this->computeMetrics($trades);
                 $metrics['window']=$window;
                 if($verbose){

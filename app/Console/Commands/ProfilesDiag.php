@@ -10,30 +10,26 @@ use App\Models\StrategyProfile;
 class ProfilesDiag extends Command
 {
     protected $signature = 'profiles:diag {--days=10} {--profile=}';
-    protected $description = 'Diagnose why /profiles shows 0 — checks tables, runs shim, prints summary';
+    protected $description = 'Diagnose profiles leaderboard data path: tables, shim run, and recent results.';
 
     public function handle(): int
     {
-        $days = (int)$this->option('days') ?: 10;
+        $days = (int)($this->option('days') ?: 10);
         $only = $this->option('profile');
 
-        $out = [];
+        $this->line('--- PROFILES DIAG ---');
 
-        // 1) profiles
-        $profiles = DB::table('strategy_profiles')->count();
+        $total = DB::table('strategy_profiles')->count();
         $enabled = DB::table('strategy_profiles')->where('enabled', true)->count();
-        $out['strategy_profiles_total'] = $profiles;
-        $out['strategy_profiles_enabled'] = $enabled;
+        $this->line("strategy_profiles: total={$total}, enabled={$enabled}");
 
-        // 2) simulated_trades sample
-        $simExists = DB::getSchemaBuilder()->hasTable('simulated_trades');
-        $out['has_simulated_trades_table'] = $simExists;
-        if ($simExists) {
+        $hasSim = DB::getSchemaBuilder()->hasTable('simulated_trades');
+        $this->line('has simulated_trades: '.($hasSim?'yes':'no'));
+        if ($hasSim) {
             $sample = DB::table('simulated_trades')->orderByDesc(DB::raw('1'))->limit(3)->get();
-            $out['simulated_trades_sample'] = $sample;
+            $this->line('simulated_trades sample: '.json_encode($sample));
         }
 
-        // 3) Try a shim run
         $profile = $only
             ? StrategyProfile::where('enabled',true)->where('id',$only)->first()
             : StrategyProfile::where('enabled',true)->orderBy('id')->first();
@@ -41,25 +37,21 @@ class ProfilesDiag extends Command
         if ($profile) {
             $start = Carbon::now('Europe/Copenhagen')->subDays($days)->startOfDay();
             $trades = BacktestShim::run($start, $days, $profile->settings ?? [], true);
-            $out['shim_trades_count'] = is_array($trades) ? count($trades) : 0;
-            $out['shim_trades_head'] = array_slice($trades, 0, 5);
+            $this->line('shim trades count: '.(is_array($trades)?count($trades):0));
+            $this->line('shim trades head: '.json_encode(array_slice((array)$trades,0,5)));
         } else {
-            $out['shim_trades_count'] = 0;
-            $out['shim_trades_head'] = [];
-            $out['note'] = 'No enabled strategy_profiles found';
+            $this->line('shim trades count: 0 (no enabled profiles found)');
         }
 
-        // 4) profile_results summary
-        $prExists = DB::getSchemaBuilder()->hasTable('profile_results');
-        $out['has_profile_results_table'] = $prExists;
-        if ($prExists) {
+        $hasPR = DB::getSchemaBuilder()->hasTable('profile_results');
+        $this->line('has profile_results: '.($hasPR?'yes':'no'));
+        if ($hasPR) {
             $cnt = DB::table('profile_results')->count();
-            $out['profile_results_count'] = $cnt;
             $last = DB::table('profile_results')->orderByDesc('id')->limit(5)->get();
-            $out['profile_results_tail'] = $last;
+            $this->line("profile_results count: {$cnt}");
+            $this->line('profile_results tail: '.json_encode($last));
         }
 
-        $this->line(json_encode($out, JSON_PRETTY_PRINT));
         return self::SUCCESS;
     }
 }

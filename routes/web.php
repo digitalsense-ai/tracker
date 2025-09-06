@@ -42,46 +42,7 @@ Route::post('/settings', [SettingsController::class, 'update'])->name('settings.
 
 Route::get('/profiles',[ProfilesController::class,'index'])->name('profiles.index');
 Route::get('/profiles/{id}',[ProfilesController::class,'show'])->name('profiles.show');
-Route::get('/profiles/run', [ProfilesRunController::class, 'run'])->name('profiles.run');
 
-Route::get('/signals-pretty', fn() => view('signals.pretty'))->name('signals.pretty');
-
-Route::get('/profiles/diag', function () {
-    $days = (int)request('days', 10);
-    $only = request('profile');
-
-    $out = [];
-
-    $out['strategy_profiles_total'] = DB::table('strategy_profiles')->count();
-    $out['strategy_profiles_enabled'] = DB::table('strategy_profiles')->where('enabled', true)->count();
-
-    $simExists = DB::getSchemaBuilder()->hasTable('simulated_trades');
-    $out['has_simulated_trades_table'] = $simExists;
-    if ($simExists) {
-        $out['simulated_trades_sample'] = DB::table('simulated_trades')->orderByDesc(DB::raw('1'))->limit(3)->get();
-    }
-
-    $profile = $only
-        ? StrategyProfile::where('enabled',true)->where('id',$only)->first()
-        : StrategyProfile::where('enabled',true)->orderBy('id')->first();
-
-    if ($profile) {
-        $start = Carbon::now('Europe/Copenhagen')->subDays($days)->startOfDay();
-        $trades = BacktestShim::run($start, $days, $profile->settings ?? [], true);
-        $out['shim_trades_count'] = is_array($trades) ? count($trades) : 0;
-        $out['shim_trades_head'] = array_slice($trades, 0, 5);
-    } else {
-        $out['shim_trades_count'] = 0;
-        $out['shim_trades_head'] = [];
-        $out['note'] = 'No enabled strategy_profiles found';
-    }
-
-    $prExists = DB::getSchemaBuilder()->hasTable('profile_results');
-    $out['has_profile_results_table'] = $prExists;
-    if ($prExists) {
-        $out['profile_results_count'] = DB::table('profile_results')->count();
-        $out['profile_results_tail'] = DB::table('profile_results')->orderByDesc('id')->limit(5)->get();
-    }
-
-    return response()->json($out);
-});
+require base_path('routes/web.signals_pretty.php');
+require base_path('routes/web.profiles_run.php');
+require base_path('routes/web.profiles_diag.php');
