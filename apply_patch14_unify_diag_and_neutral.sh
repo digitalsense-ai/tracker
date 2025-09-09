@@ -1,3 +1,14 @@
+#!/bin/bash
+set -e
+# Ensure we run from project root (artisan must exist)
+if [ ! -f artisan ]; then
+  echo "Please run from your Laravel project root (artisan missing)."
+  exit 1
+fi
+
+# 1) Write/overwrite routes/web.profiles_diag.php
+mkdir -p routes
+cat > routes/web.profiles_diag.php <<'PHP'
 <?php
 
 use Illuminate\Support\Facades\Route;
@@ -41,3 +52,40 @@ Route::get('/profiles/diag', function () {
 
     return response()->json($out);
 })->name('profiles.diag');
+PHP
+
+# 2) Add neutral /x-diag route in routes/web.php if missing
+if ! grep -q "name('x.diag')" routes/web.php; then
+  echo "" >> routes/web.php
+  cat >> routes/web.php <<'PHP'
+<?php
+
+use Illuminate\Support\Facades\Route;
+
+Route::get('/x-diag', function () {
+    return response()->json([
+        'ok' => true,
+        'ts' => now()->toDateTimeString(),
+        'routes' => [
+            'profiles_diag' => route('profiles.diag', ['days'=>10], false),
+        ]
+    ]);
+})->name('x.diag');
+PHP
+
+fi
+
+# 3) Ensure requires exist at bottom of routes/web.php
+append_req() {
+  local line="$1"
+  grep -qF "$line" routes/web.php || echo "$line" >> routes/web.php
+}
+append_req "require base_path('routes/web.profiles_diag.php');"
+append_req "require base_path('routes/web.profiles_run.php');"
+append_req "require base_path('routes/web.signals_pretty.php');"
+
+# 4) Clear caches & show routes
+php artisan optimize:clear || true
+php artisan route:list | grep -E "profiles\.diag|x\.diag|signals\.pretty" || true
+
+echo "Done. Try: /x-diag and /profiles/diag?days=10"
