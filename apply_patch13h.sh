@@ -1,0 +1,73 @@
+#!/bin/bash
+set -e
+WEB="routes/web.php"
+if ! grep -q "PATCH13H: inline routes" "$WEB"; then
+  echo ">> Appending PATCH13H inline diagnostic routes to $WEB"
+  printf "\n%s\n" '// === PATCH13H: inline routes (diagnostics, no extra use statements) ===
+
+Route::get('\''/ping'\'', fn() => response('\''pong: web.php loaded'\'', 200));
+
+Route::get('\''/routes-dump'\'', function () {
+    $out = [];
+    foreach (Route::getRoutes() as $r) {
+        $out[] = ['\''uri'\''=>$r->uri(), '\''name'\''=>$r->getName(), '\''methods'\''=>$r->methods()];
+    }
+    return response()->json($out);
+})->name('\''routes.dump'\'');
+
+Route::get('\''/signals-pretty'\'', function () {
+    if (view()->exists('\''signals.pretty'\'')) {
+        return view('\''signals.pretty'\'');
+    }
+    return response('\''<h1>Signals Pretty</h1><p>Create resources/views/signals/pretty.blade.php</p>'\'', 200);
+})->name('\''signals.pretty'\'');
+
+Route::get('\''/profiles/diag'\'', function () {
+    $days = (int)request('\''days'\'', 10);
+    $only = request('\''profile'\'');
+
+    $out = [];
+    $out['\''strategy_profiles_total'\'']   = \DB::table('\''strategy_profiles'\'')->count();
+    $out['\''strategy_profiles_enabled'\''] = \DB::table('\''strategy_profiles'\'')->where('\''enabled'\'', true)->count();
+
+    $simExists = \DB::getSchemaBuilder()->hasTable('\''simulated_trades'\'');
+    $out['\''has_simulated_trades_table'\''] = $simExists;
+    if ($simExists) {
+        $out['\''simulated_trades_sample'\''] = \DB::table('\''simulated_trades'\'')->orderByDesc(\DB::raw('\''1'\''))->limit(3)->get();
+    }
+
+    $profile = $only
+        ? \App\Models\StrategyProfile::where('\''enabled'\'',true)->where('\''id'\'',$only)->first()
+        : \App\Models\StrategyProfile::where('\''enabled'\'',true)->orderBy('\''id'\'')->first();
+
+    if ($profile) {
+        $start  = \Carbon\Carbon::now('\''Europe/Copenhagen'\'')->subDays($days)->startOfDay();
+        $trades = \App\Support\BacktestShim::run($start, $days, $profile->settings ?? [], true);
+        $out['\''shim_trades_count'\''] = is_array($trades) ? count($trades) : 0;
+        $out['\''shim_trades_head'\'']  = array_slice($trades, 0, 5);
+    } else {
+        $out['\''shim_trades_count'\''] = 0;
+        $out['\''note'\''] = '\''No enabled strategy_profiles found'\'';
+    }
+
+    $prExists = \DB::getSchemaBuilder()->hasTable('\''profile_results'\'');
+    $out['\''has_profile_results_table'\''] = $prExists;
+    if ($prExists) {
+        $out['\''profile_results_count'\''] = \DB::table('\''profile_results'\'')->count();
+        $out['\''profile_results_tail'\'']  = \DB::table('\''profile_results'\'')->orderByDesc('\''id'\'')->limit(5)->get();
+    }
+
+    return response()->json($out);
+})->name('\''profiles.diag'\'');
+
+// === /PATCH13H ===
+' >> "$WEB"
+else
+  echo ">> PATCH13H block already present in $WEB"
+fi
+php artisan optimize:clear || true
+php artisan route:list | grep -E "profiles\\.diag|routes\\.dump|signals\\.pretty|ping" || true
+echo "Done. Test these URLs:"
+echo "  /ping"
+echo "  /routes-dump"
+echo "  /profiles/diag?days=10"

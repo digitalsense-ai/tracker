@@ -1,45 +1,21 @@
 <?php
+
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
-use App\Support\BacktestShim;
-use App\Models\StrategyProfile;
+use Illuminate\Http\Request;
+use App\Services\ProfileService;
 
-Route::get('/profiles/diag', function () {
-    $days = (int)request('days', 10);
-    $only = request('profile');
+// Profiles diagnostics (JSON)
+Route::get('/profiles/diag', function (Request $request) {
+    $days = (int) $request->query('days', 5);
+    $limit = (int) $request->query('limit', 50);
 
-    $out = [];
+    $svc = app(ProfileService::class);
+    $data = $svc->diagnostics($days, $limit);
 
-    $out['strategy_profiles_total']   = DB::table('strategy_profiles')->count();
-    $out['strategy_profiles_enabled'] = DB::table('strategy_profiles')->where('enabled', true)->count();
-
-    $simExists = DB::getSchemaBuilder()->hasTable('simulated_trades');
-    $out['has_simulated_trades_table'] = $simExists;
-    if ($simExists) {
-        $out['simulated_trades_sample'] = DB::table('simulated_trades')->orderByDesc(DB::raw('1'))->limit(3)->get();
-    }
-
-    $profile = $only
-        ? StrategyProfile::where('enabled',true)->where('id',$only)->first()
-        : StrategyProfile::where('enabled',true)->orderBy('id')->first();
-
-    if ($profile) {
-        $start  = Carbon::now('Europe/Copenhagen')->subDays($days)->startOfDay();
-        $trades = BacktestShim::run($start, $days, $profile->settings ?? [], true);
-        $out['shim_trades_count'] = is_array($trades) ? count($trades) : 0;
-        $out['shim_trades_head']  = array_slice($trades, 0, 5);
-    } else {
-        $out['shim_trades_count'] = 0;
-        $out['note'] = 'No enabled strategy_profiles found';
-    }
-
-    $prExists = DB::getSchemaBuilder()->hasTable('profile_results');
-    $out['has_profile_results_table'] = $prExists;
-    if ($prExists) {
-        $out['profile_results_count'] = DB::table('profile_results')->count();
-        $out['profile_results_tail']  = DB::table('profile_results')->orderByDesc('id')->limit(5)->get();
-    }
-
-    return response()->json($out);
+    return response()->json([
+        'ok'   => true,
+        'days' => $days,
+        'limit'=> $limit,
+        'data' => $data,
+    ]);
 })->name('profiles.diag');
