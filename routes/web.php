@@ -229,3 +229,4 @@ Route::get('/_profiles_diag', function () {
 })->name('profiles.diag.direct');
 // === /PATCH15 ===
 
+require base_path('routes/web.profiles_tools.php');
