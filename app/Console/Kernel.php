@@ -11,6 +11,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\SimulateTrades::class,
         \App\Console\Commands\BacktestGridCommand::class,
         \App\Console\Commands\SimulateV5::class,
+        \App\Console\Commands\ProfilesRecompute::class,
     ];
 
     /**
