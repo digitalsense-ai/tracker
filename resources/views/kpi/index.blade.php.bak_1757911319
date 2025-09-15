@@ -1,0 +1,5 @@
+@extends('layouts.app')
+@section('content')
+<h1>KPIs</h1>
+<p>Controller should compute: trades, winrate, avg_r, fees_sum, net_sum, profit_factor using the same filtered rows as the table.</p>
+@endsection

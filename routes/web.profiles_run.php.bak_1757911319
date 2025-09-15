@@ -11,8 +11,8 @@ Route::post('/profiles/run', function(Request $request){
     $out = [];
     foreach($cmds as $c){
         try {
-            Artisan::call($c, ['--days'=>$days,'--limit'=>$limit]);
-            $out[] = "Ran $c\n".Artisan::output();
+            \Artisan::call($c, ['--days'=>$days,'--limit'=>$limit]);
+            $out[] = "Ran $c\n".\Artisan::output();
             break;
         } catch (\Throwable $e){
             $out[] = "Failed $c: ".$e->getMessage();

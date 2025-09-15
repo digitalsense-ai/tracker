@@ -1,0 +1,5 @@
+@extends('layouts.app')
+@section('content')
+<h1>Explainer Flow</h1>
+<p>Open with: <code>/explainer-flow?ticker=AAPL&date=2025-08-22</code>. Controller should fetch the matching trade and render the steps.</p>
+@endsection

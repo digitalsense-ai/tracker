@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 
 Route::get('/signals', function(){
+    // Render pretty table view; controller can be wired later
     return view('signals.index');
 })->name('signals.index');
 

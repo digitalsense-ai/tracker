@@ -1,0 +1,8 @@
+@extends('layouts.app')
+@section('content')
+<h1>Profiles Leaderboard</h1>
+<p>Render recent profile_results window per profile; sort by score (fallback PF/winrate/net).</p>
+<table class="table"><thead><tr><th>Profile</th><th>Trades</th><th>Win%</th><th>Net</th><th>PF</th><th>Score</th></tr></thead><tbody>
+<tr><td>#47</td><td>0</td><td>0%</td><td>0</td><td>0.00</td><td>0</td></tr>
+</tbody></table>
+@endsection
