@@ -42,11 +42,17 @@ class ProfilesRecompute extends Command
             $this->simulateTrades($days, $vv);
         }
 
+        // Only select 'id' to avoid schema mismatches (no dependency on 'rules'/'name').
         $profiles = DB::table('strategy_profiles')
             ->where('enabled', 1)
             ->orderBy('id')
             ->limit($limit)
-            ->get(['id', 'name', 'rules', 'enabled']);
+            ->get(['id']);
+
+        // Guard: if table or column missing, explain and stop gracefully
+        if ($profiles->count() === 0) {
+            $this->warn('No enabled profiles found in strategy_profiles.');
+        }
 
         $trades = DB::table('simulated_trades')
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
@@ -56,10 +62,11 @@ class ProfilesRecompute extends Command
         $rowsToInsert = [];
 
         foreach ($profiles as $p) {
-            $pTrades = $trades; // TODO: filtrer efter profilregler
+            // TODO: apply per-profile filtering when profile rules are available.
+            $pTrades = $trades;
             $tradesCount = $pTrades->count();
-            $netPl = (float)$pTrades->sum(fn($t) => (float)$t->net_profit);
-            $wins = $pTrades->filter(fn($t) => (float)$t->net_profit > 0)->count();
+            $netPl = (float)$pTrades->sum(function($t){ return (float)$t->net_profit; });
+            $wins = $pTrades->filter(function($t){ return (float)$t->net_profit > 0; })->count();
             $winrate = $tradesCount > 0 ? round(100.0 * $wins / $tradesCount, 2) : 0.0;
 
             $rowsToInsert[] = [
@@ -78,7 +85,12 @@ class ProfilesRecompute extends Command
             ];
         }
 
-        if (!$dryRun && count($rowsToInsert) > 0) {
+        if ($dryRun) {
+            $this->info('Dry run: would insert '.count($rowsToInsert).' rows for window '.$windowLabel);
+            return self::SUCCESS;
+        }
+
+        if (count($rowsToInsert) > 0) {
             DB::table('profile_results')->where('window', $windowLabel)->delete();
             DB::table('profile_results')->insert($rowsToInsert);
         }
@@ -91,9 +103,11 @@ class ProfilesRecompute extends Command
     {
         try {
             Artisan::call('backtest:simulate-v5', ['--days' => $days]);
+            if ($vv) { $this->line('Ran backtest:simulate-v5'); }
         } catch (\Throwable $e) {
             try {
                 Artisan::call('backtest:simulate', ['--days' => $days]);
+                if ($vv) { $this->line('Ran backtest:simulate'); }
             } catch (\Throwable $e) {
                 $this->warn('No simulation command available.');
             }

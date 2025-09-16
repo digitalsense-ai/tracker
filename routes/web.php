@@ -46,7 +46,9 @@ Route::get('/ping', fn() => response('pong: web.php OK', 200))->name('ping');
 Route::get('/routes-dump', function () {
     $out = [];
     foreach (Route::getRoutes() as $r) {
-        $out[] = ['uri' => $r->uri(), 'name' => $r->getName(), 'methods' => $r->methods()];
+        $action = $r->getAction();
+
+        $out[] = ['uri' => $r->uri(), 'name' => $r->getName(), 'methods' => $r->methods(), 'controller' => $action['controller'] ?? null,];
     }
     return response()->json($out);
 })->name('routes.dump');

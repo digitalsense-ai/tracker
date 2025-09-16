@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 class ProfilesController extends Controller
 {
     public function leaderboard(Request $request)
-    {
+    {dd("test");
         $days = (int)($request->input('days', 10));
         if ($days <= 0) { $days = 10; }
         $since = now()->subDays($days)->toDateString();
