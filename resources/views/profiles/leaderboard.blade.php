@@ -1,39 +1,47 @@
 @extends('layouts.app')
+
 @section('content')
-<h1>Profiles Leaderboard</h1>
+<div class="container">
+  <h1>Profiles Leaderboard</h1>
 
-<form method="get" class="mb-3" style="margin-bottom:1rem;">
-  <label for="days" style="margin-right:8px;">Window (days)</label>
-  <input id="days" name="days" type="number" min="1" max="90" value="{{ $days ?? 10 }}" style="width:80px;">
-  <button class="btn" style="margin-left:8px;">Filter</button>
-</form>
+  <form method="GET" action="{{ route('profiles.leaderboard') }}" class="mb-3">
+    <label for="days" class="form-label">Window (days):</label>
+    <input id="days" type="number" class="form-control" name="days" value="{{ request('days', 10) }}" min="0" />
+    <small class="text-muted">Sæt til 0 for at slå dato-filter fra.</small>
+    <div class="mt-2"><button class="btn btn-primary">Opdater</button></div>
+  </form>
 
-@if(($rows ?? null) && $rows->count())
-  <div class="card">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Profile</th><th>Trades</th><th>Win%</th><th>Avg R</th><th>PF</th><th>Net</th><th>Score</th><th>Window</th>
-        </tr>
-      </thead>
-      <tbody>
-        @foreach($rows as $r)
+  @if($rows->isEmpty())
+    <div class="alert alert-info">No profile results for the selected window.</div>
+  @else
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
           <tr>
-            <td>{{ $r->profile_code ?? $r->profile_id }}</td>
-            <td>{{ $r->trades }}</td>
-            <td>{{ is_numeric($r->winrate) ? number_format($r->winrate,1) : $r->winrate }}%</td>
-            <td>{{ is_numeric($r->avg_r) ? number_format($r->avg_r,2) : $r->avg_r }}</td>
-            <td>{{ is_numeric($r->profit_factor) ? number_format($r->profit_factor,2) : $r->profit_factor }}</td>
-            <td>{{ is_numeric($r->net_pl) ? number_format($r->net_pl,2) : $r->net_pl }}</td>
-            <td>{{ is_numeric($r->score) ? number_format($r->score,2) : $r->score }}</td>
-            <td class="text-muted">{{ $r->window }}</td>
+            <th>Profile</th>
+            <th class="text-end">Trades</th>
+            <th class="text-end">PNL</th>
+            <th class="text-end">Win %</th>
+            <th>Window</th>
           </tr>
-        @endforeach
-      </tbody>
-    </table>
-    {{ $rows->withQueryString()->links() }}
-  </div>
-@else
-  <p class="text-muted">No profile results for the selected window.</p>
-@endif
+        </thead>
+        <tbody>
+          @foreach($rows as $r)
+            <tr>
+              <td>{{ $r->name }}</td>
+              <td class="text-end">{{ number_format((int)$r->trades) }}</td>
+              <td class="text-end">{{ number_format((float)$r->pnl, 2) }}</td>
+              <td class="text-end">{{ number_format((float)$r->win_rate, 2) }}</td>
+              <td>
+                {{ optional($r->window_start ?? $r->window_start_eff)->format('Y-m-d H:i') ?? '' }}
+                —
+                {{ optional($r->window_end ?? $r->window_end_eff)->format('Y-m-d H:i') ?? '' }}
+              </td>
+            </tr>
+          @endforeach
+        </tbody>
+      </table>
+    </div>
+  @endif
+</div>
 @endsection
