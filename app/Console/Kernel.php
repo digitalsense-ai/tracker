@@ -24,7 +24,8 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('forecast:refresh')->everyFiveMinutes();
         $schedule->command('simulate:trades')->dailyAt('15:40'); // fx 15:40 dansk tid
-        $schedule->command('profiles:recompute')->weekdays()->at('17:15');
+        //$schedule->command('profiles:recompute')->weekdays()->at('17:15');
+        $schedule->command('profiles:recompute')->cron('3 * * * *');
     }
 
     /**
