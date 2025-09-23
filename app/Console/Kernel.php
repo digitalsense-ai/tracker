@@ -4,6 +4,7 @@ namespace App\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use Storage;
 
 class Kernel extends ConsoleKernel
 {
@@ -25,7 +26,17 @@ class Kernel extends ConsoleKernel
         $schedule->command('forecast:refresh')->everyFiveMinutes();
         $schedule->command('simulate:trades')->dailyAt('15:40'); // fx 15:40 dansk tid
         //$schedule->command('profiles:recompute')->weekdays()->at('17:15');
-        $schedule->command('profiles:recompute')->cron('3 * * * *');
+        //$schedule->command('profiles:recompute')->cron('3 * * * *');
+
+        $schedule->command('run:nyopen --yesterday')
+             ->weekdays()
+             ->at('23:30')
+             ->appendOutputTo(storage_path('logs/nyopen.log'));
+
+        $schedule->command('profiles:recompute --days=0 --table=trades --ts=created_at --auto-pnl')
+             ->weekdays()
+             ->at('23:30')
+             ->appendOutputTo(storage_path('logs/nyopen.log'));
     }
 
     /**
