@@ -4,9 +4,12 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
 use Carbon\CarbonImmutable;
+use App\Services\Data\PriceDataProvider;
 
 class NyOpenBacktester
 {
+    public function __construct(private PriceDataProvider $data) {}
+
     public function runProfileOnTickerWindow(
         int $profileId,
         string $ticker,
@@ -22,45 +25,23 @@ class NyOpenBacktester
             'end'        => $endEt->toIso8601String(),
         ]);
 
-        // TODO: Hent jeres data her (bars, prev_close osv.)
-        $barsCount   = $barsCount   ?? null;
-        $prevClose   = $prevClose   ?? null;
-        $gapThreshold = $gapThreshold ?? null;
-        $minVolume    = $minVolume ?? null;
-        $candidates   = $candidates ?? [];
-        $entries      = $entries ?? [];
-        $exits        = $exits ?? [];
+        $prevClose = $this->data->getPrevClose($ticker, $startEt);
+        $barsPack  = $this->data->getBarsInWindow($ticker, $startEt, $endEt);
+        $barsCount = $barsPack['count'] ?? 0;
+        $bars      = $barsPack['bars']  ?? [];
 
         Log::info('NYOPEN strat.data', [
-            'profile_id' => $profileId,
-            'ticker'     => $ticker,
+            'profile_id'     => $profileId,
+            'ticker'         => $ticker,
             'bars_in_window' => $barsCount,
-            'has_prev_close' => isset($prevClose),
+            'has_prev_close' => $prevClose !== null,
         ]);
 
-        Log::info('NYOPEN strat.candidates', [
-            'profile_id' => $profileId,
-            'ticker'     => $ticker,
-            'candidates_raw' => is_countable($candidates) ? count($candidates) : 0,
-            'gap_threshold'  => $gapThreshold,
-            'min_volume'     => $minVolume,
-        ]);
-
-        // TODO: indsæt jeres logik til at fylde $trades baseret på $candidates
-        // fx: $trades = $entries; // eller kombiner entries/exits
-
-        Log::info('NYOPEN strat.result', [
-            'profile_id' => $profileId,
-            'ticker'     => $ticker,
-            'entries'    => is_countable($entries) ? count($entries) : 0,
-            'exits'      => is_countable($exits) ? count($exits) : 0,
-            'trades'     => is_countable($trades) ? count($trades) : 0,
-        ]);
-
+        // TODO: jeres rigtige entries/exits/trades her
         Log::info('NYOPEN service.out', [
             'profile_id' => $profileId,
             'ticker'     => $ticker,
-            'n'          => is_countable($trades) ? count($trades) : 0,
+            'n'          => count($trades),
         ]);
 
         return $trades;
