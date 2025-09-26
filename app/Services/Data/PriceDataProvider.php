@@ -3,6 +3,7 @@
 namespace App\Services\Data;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\CarbonImmutable;
 
 class PriceDataProvider
@@ -17,11 +18,22 @@ class PriceDataProvider
         $c = $this->cfg['cols'];
         $prevDay = $dateEt->subDay()->format('Y-m-d');
 
+        Log::info('NYOPEN data.prev.query', [
+            'table'   => $tDaily,
+            'ticker'  => $ticker,
+            'prevDay' => $prevDay,
+        ]);
+
         $row = DB::table($tDaily)
             ->select($c['close'].' as close')
             ->where($c['ticker'], $ticker)
             ->where($c['date'], $prevDay)
             ->first();
+
+        Log::info('NYOPEN data.prev.result', [
+            'has_prev' => $row ? true : false,
+            'val'      => $row->close ?? null
+        ]);
 
         return $row ? (float)$row->close : null;
     }
@@ -34,11 +46,26 @@ class PriceDataProvider
         $startUtc = $startEt->tz('UTC')->toDateTimeString();
         $endUtc   = $endEt->tz('UTC')->toDateTimeString();
 
+        Log::info('NYOPEN strat.call_bars', [
+            'ticker'  => $ticker,
+            'startEt' => $startEt->toIso8601String(),
+            'endEt'   => $endEt->toIso8601String(),
+        ]);
+
+        Log::info('NYOPEN data.bars.query', [
+            'table'    => $tIntra,
+            'ticker'   => $ticker,
+            'startUtc' => $startUtc,
+            'endUtc'   => $endUtc,
+        ]);
+
         $rows = DB::table($tIntra)
             ->where($c['ticker'], $ticker)
             ->whereBetween($c['ts'], [$startUtc, $endUtc])
             ->orderBy($c['ts'])
             ->get([$c['ts'].' as ts', $c['open'].' as o', $c['high'].' as h', $c['low'].' as l', $c['last'].' as p', $c['volume'].' as v']);
+
+        Log::info('NYOPEN data.bars.result', ['rows' => count($rows)]);
 
         $bars = [];
         foreach ($rows as $r) {

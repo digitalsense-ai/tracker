@@ -28,7 +28,6 @@ class NyOpenBacktester
         $prevClose = $this->data->getPrevClose($ticker, $startEt);
         $barsPack  = $this->data->getBarsInWindow($ticker, $startEt, $endEt);
         $barsCount = $barsPack['count'] ?? 0;
-        $bars      = $barsPack['bars']  ?? [];
 
         Log::info('NYOPEN strat.data', [
             'profile_id'     => $profileId,
@@ -37,7 +36,6 @@ class NyOpenBacktester
             'has_prev_close' => $prevClose !== null,
         ]);
 
-        // TODO: jeres rigtige entries/exits/trades her
         Log::info('NYOPEN service.out', [
             'profile_id' => $profileId,
             'ticker'     => $ticker,
