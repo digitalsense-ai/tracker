@@ -10,6 +10,7 @@ use App\Http\Controllers\SignalsController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ProfilesController;
 use App\Http\Controllers\ProfilesRunController;
+use App\Http\Controllers\Profiles\LeaderboardController;
 
 Route::get('/', function () {
     return redirect('/dashboard');
@@ -32,6 +33,8 @@ Route::get('/signals', [SignalsController::class, 'index'])->name('signals');
 
 Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
+
+Route::get('/profiles/leaderboard', [LeaderboardController::class, 'index'])->name('profiles.leaderboard');
 
 /**
  * RESCUED web.php (Patch16C)

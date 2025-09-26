@@ -32,7 +32,6 @@ class RunNyOpenBacktestJob implements ShouldQueue
 
         $service = app(NyOpenBacktester::class);
 
-        // Resolve profiles
         $profilesToRun = $this->profiles;
         if (empty($profilesToRun)) {
             $profilesToRun = DB::table('strategy_profiles')
@@ -42,28 +41,39 @@ class RunNyOpenBacktestJob implements ShouldQueue
                 ->all();
         }
 
+        Log::info('NYOPEN job.start', ['date'=>$this->dateYmd,'profiles_count'=>count($profilesToRun),'universe'=>$this->universe]);
+
+        $totalInserted = 0;
+
         foreach ($profilesToRun as $pname) {
             $pid = DB::table('strategy_profiles')->where('name', $pname)->value('id');
-            if (!$pid) { Log::warning("NYOPEN: profile not found: {$pname}"); continue; }
+            if (!$pid) { Log::warning("NYOPEN job.profile_missing", ['name'=>$pname]); continue; }
+
+            $profileSum = 0;
 
             foreach ($this->universe as $ticker) {
                 $startEt = CarbonImmutable::parse($this->dateYmd . ' ' . $windowStartEt, $tzEt);
                 $endEt   = CarbonImmutable::parse($this->dateYmd . ' ' . $windowEndEt,   $tzEt);
 
-                $trades = $service->runProfileOnTickerWindow($pid, $ticker, $startEt, $endEt);
-
-                if ($this->dryRun) {
-                    Log::info("NYOPEN DRY: {$pname} {$ticker} -> trades=" . count($trades));
+                try {
+                    $trades = $service->runProfileOnTickerWindow($pid, $ticker, $startEt, $endEt);
+                } catch (\Throwable $e) {
+                    Log::error('NYOPEN job.svc_error', ['profile'=>$pname,'ticker'=>$ticker,'msg'=>$e->getMessage()]);
                     continue;
                 }
 
+                $n = is_countable($trades ?? []) ? count($trades) : 0;
+                if ($n === 0) {
+                    Log::warning('NYOPEN job.svc_zero', ['profile'=>$pname,'ticker'=>$ticker,'start'=>$startEt->toIso8601String(),'end'=>$endEt->toIso8601String()]);
+                } else {
+                    Log::info('NYOPEN job.svc_count', ['profile'=>$pname,'ticker'=>$ticker,'n'=>$n]);
+                }
+
+                if ($this->dryRun) { continue; }
+
                 foreach ($trades as $t) {
                     DB::table('trades')->updateOrInsert(
-                        [
-                            'strategy_profile_id' => $pid,
-                            'ticker' => $ticker,
-                            'created_at' => $t['created_at'], // entry time UTC
-                        ],
+                        ['strategy_profile_id' => $pid, 'ticker' => $ticker, 'created_at' => $t['created_at']],
                         [
                             'entry_price' => $t['entry_price'],
                             'exit_price'  => $t['exit_price'],
@@ -73,8 +83,14 @@ class RunNyOpenBacktestJob implements ShouldQueue
                             'updated_at' => now('UTC'),
                         ]
                     );
+                    $profileSum += 1;
+                    $totalInserted += 1;
                 }
             }
+
+            Log::info('NYOPEN job.profile_sum', ['profile'=>$pname,'inserted'=>$profileSum]);
         }
+
+        Log::info('NYOPEN job.done', ['total_inserted'=>$totalInserted]);
     }
 }
