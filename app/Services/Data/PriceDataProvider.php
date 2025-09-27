@@ -22,20 +22,26 @@ class PriceDataProvider
             'table'   => $tDaily,
             'ticker'  => $ticker,
             'prevDay' => $prevDay,
+            'col_ticker'=>$c['ticker'],'col_date'=>$c['date'],'col_close'=>$c['close'],
         ]);
 
-        $row = DB::table($tDaily)
-            ->select($c['close'].' as close')
-            ->where($c['ticker'], $ticker)
-            ->where($c['date'], $prevDay)
-            ->first();
+        try {
+            $row = DB::table($tDaily)
+                ->select($c['close'].' as close')
+                ->where($c['ticker'], $ticker)
+                ->where($c['date'], $prevDay)
+                ->first();
 
-        Log::info('NYOPEN data.prev.result', [
-            'has_prev' => $row ? true : false,
-            'val'      => $row->close ?? null
-        ]);
+            Log::info('NYOPEN data.prev.result', [
+                'has_prev' => $row ? true : false,
+                'val'      => $row->close ?? null
+            ]);
 
-        return $row ? (float)$row->close : null;
+            return $row ? (float)$row->close : null;
+        } catch (\Throwable $e) {
+            Log::error('NYOPEN data.prev.error', ['msg'=>$e->getMessage()]);
+            return null;
+        }
     }
 
     public function getBarsInWindow(string $ticker, CarbonImmutable $startEt, CarbonImmutable $endEt): array
@@ -46,38 +52,38 @@ class PriceDataProvider
         $startUtc = $startEt->tz('UTC')->toDateTimeString();
         $endUtc   = $endEt->tz('UTC')->toDateTimeString();
 
-        Log::info('NYOPEN strat.call_bars', [
-            'ticker'  => $ticker,
-            'startEt' => $startEt->toIso8601String(),
-            'endEt'   => $endEt->toIso8601String(),
-        ]);
-
         Log::info('NYOPEN data.bars.query', [
             'table'    => $tIntra,
             'ticker'   => $ticker,
             'startUtc' => $startUtc,
             'endUtc'   => $endUtc,
+            'col_ts'=>$c['ts'],'col_open'=>$c['open'],'col_high'=>$c['high'],'col_low'=>$c['low'],'col_last'=>$c['last'],'col_vol'=>$c['volume'],
         ]);
 
-        $rows = DB::table($tIntra)
-            ->where($c['ticker'], $ticker)
-            ->whereBetween($c['ts'], [$startUtc, $endUtc])
-            ->orderBy($c['ts'])
-            ->get([$c['ts'].' as ts', $c['open'].' as o', $c['high'].' as h', $c['low'].' as l', $c['last'].' as p', $c['volume'].' as v']);
+        try {
+            $rows = DB::table($tIntra)
+                ->where($c['ticker'], $ticker)
+                ->whereBetween($c['ts'], [$startUtc, $endUtc])
+                ->orderBy($c['ts'])
+                ->get([$c['ts'].' as ts', $c['open'].' as o', $c['high'].' as h', $c['low'].' as l', $c['last'].' as p', $c['volume'].' as v']);
 
-        Log::info('NYOPEN data.bars.result', ['rows' => count($rows)]);
+            Log::info('NYOPEN data.bars.result', ['rows' => count($rows)]);
 
-        $bars = [];
-        foreach ($rows as $r) {
-            $bars[] = [
-                'ts_utc' => $r->ts,
-                'open'   => $r->o ?? null,
-                'high'   => $r->h ?? null,
-                'low'    => $r->l ?? null,
-                'price'  => $r->p ?? null,
-                'volume' => $r->v ?? null,
-            ];
+            $bars = [];
+            foreach ($rows as $r) {
+                $bars[] = [
+                    'ts_utc' => $r->ts,
+                    'open'   => $r->o ?? null,
+                    'high'   => $r->h ?? null,
+                    'low'    => $r->l ?? null,
+                    'price'  => $r->p ?? null,
+                    'volume' => $r->v ?? null,
+                ];
+            }
+            return ['count' => count($bars), 'bars' => $bars];
+        } catch (\Throwable $e) {
+            Log::error('NYOPEN data.bars.error', ['msg'=>$e->getMessage()]);
+            return ['count'=>0,'bars'=>[]];
         }
-        return ['count' => count($bars), 'bars' => $bars];
     }
 }

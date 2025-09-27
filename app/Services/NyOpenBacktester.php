@@ -18,11 +18,23 @@ class NyOpenBacktester
     ): array {
         $trades = [];
 
+        $btFile = (new \ReflectionClass($this))->getFileName();
+        Log::info('NYOPEN class.backtester', ['class'=>get_class($this), 'file'=>$btFile]);
+
+        $provFile = (new \ReflectionClass($this->data))->getFileName();
+        Log::info('NYOPEN class.provider', ['class'=>get_class($this->data), 'file'=>$provFile]);
+
         Log::info('NYOPEN service.in', [
             'profile_id' => $profileId,
             'ticker'     => $ticker,
             'start'      => $startEt->toIso8601String(),
             'end'        => $endEt->toIso8601String(),
+        ]);
+
+        Log::info('NYOPEN strat.call_bars', [
+            'ticker'  => $ticker,
+            'startEt' => $startEt->toIso8601String(),
+            'endEt'   => $endEt->toIso8601String(),
         ]);
 
         $prevClose = $this->data->getPrevClose($ticker, $startEt);
