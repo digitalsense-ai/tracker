@@ -66,9 +66,13 @@ class ProfilesRecompute extends Command
             } elseif ($autoPnL && Schema::hasColumn($table,'entry_price') && Schema::hasColumn($table,'exit_price')) {
                 //$rows = (clone $q)->select('entry_price','exit_price')->get();
                 $rows = DB::table($table)
-                        ->where('strategy_profile_id',$pid)
-                        ->when($days > 0, fn($q)=>$q->whereBetween($ts,[$start,$end]))
-                        ->get();
+                            ->where('strategy_profile_id', $pid)
+                            ->when($days > 0, fn($q)=>$q->whereBetween($ts, [$start, $end]))
+                            ->select('id','ticker',$ts.' as ts','entry_price','exit_price','result')
+                            ->get();
+
+                $this->line("PID={$pid} rows=".count($rows));
+                
                 foreach ($rows as $r) {
                     if ($r->entry_price!==null && $r->exit_price!==null) {
                         $p = $short ? ($r->entry_price - $r->exit_price) : ($r->exit_price - $r->entry_price);
