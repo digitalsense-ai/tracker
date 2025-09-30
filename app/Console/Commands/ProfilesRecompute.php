@@ -11,6 +11,7 @@ class ProfilesRecompute extends Command
         {--days=90}
         {--table=trades}
         {--ts=created_at}
+        {--limit=0}
         {--pnl=}
         {--auto-pnl}
         {--short}
@@ -34,13 +35,26 @@ class ProfilesRecompute extends Command
 
         $end   = now();
         $start = $days > 0 ? now()->subDays($days)->startOfDay() : null;
-
+        
         $base = DB::table($table)->whereNotNull('strategy_profile_id');
-        if ($start) $base->whereBetween($ts, [$start, $end]);
+        //if ($start) $base->whereBetween($ts, [$start, $end]);
 
-        $profileIds = (clone $base)->distinct()->pluck('strategy_profile_id')->filter()->values();
+        //$profileIds = (clone $base)->distinct()->pluck('strategy_profile_id')->filter()->values();
+
+        $limit = (int) $this->option('limit');
+
+        $profilesQuery = \App\Models\StrategyProfile::query()
+            ->when(\Schema::hasColumn('strategy_profiles','enabled'), fn($q) => $q->where('enabled',1))
+            ->orderBy('id');
+
+        if ($limit > 0) {
+            $profilesQuery->limit($limit);
+        }
+
+        $profileIds = $profilesQuery->pluck('id')->all();
 
         $this->line("--- PROFILES RECOMPUTE (FK) ---");
+        $this->info('Profiles selected: '.count($profileIds));
         foreach ($profileIds as $pid) {
             $q = (clone $base)->where('strategy_profile_id', $pid);
             $trades = (clone $q)->count();
@@ -50,7 +64,11 @@ class ProfilesRecompute extends Command
                 $pnl  = (clone $q)->sum($pnlCol);
                 $wins = (clone $q)->where($pnlCol,'>',0)->count();
             } elseif ($autoPnL && Schema::hasColumn($table,'entry_price') && Schema::hasColumn($table,'exit_price')) {
-                $rows = (clone $q)->select('entry_price','exit_price')->get();
+                //$rows = (clone $q)->select('entry_price','exit_price')->get();
+                $rows = DB::table($table)
+                        ->where('strategy_profile_id',$pid)
+                        ->when($days > 0, fn($q)=>$q->whereBetween($ts,[$start,$end]))
+                        ->get();
                 foreach ($rows as $r) {
                     if ($r->entry_price!==null && $r->exit_price!==null) {
                         $p = $short ? ($r->entry_price - $r->exit_price) : ($r->exit_price - $r->entry_price);
@@ -82,6 +100,8 @@ class ProfilesRecompute extends Command
 
             $name = DB::table('strategy_profiles')->where('id',$pid)->value('name') ?? ('#'.$pid);
             $this->line("$name trades=$trades pnl=$pnl win%=$winRate");
+
+            $this->line("Aggregating PID={$pid} window={$start}..{$end}");
         }
 
         $this->info('Done.');

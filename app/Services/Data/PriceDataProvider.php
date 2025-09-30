@@ -22,7 +22,6 @@ class PriceDataProvider
             'table'   => $tDaily,
             'ticker'  => $ticker,
             'prevDay' => $prevDay,
-            'col_ticker'=>$c['ticker'],'col_date'=>$c['date'],'col_close'=>$c['close'],
         ]);
 
         try {
@@ -57,7 +56,6 @@ class PriceDataProvider
             'ticker'   => $ticker,
             'startUtc' => $startUtc,
             'endUtc'   => $endUtc,
-            'col_ts'=>$c['ts'],'col_open'=>$c['open'],'col_high'=>$c['high'],'col_low'=>$c['low'],'col_last'=>$c['last'],'col_vol'=>$c['volume'],
         ]);
 
         try {

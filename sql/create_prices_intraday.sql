@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS prices_intraday (
+  ticker VARCHAR(16) NOT NULL,
+  ts DATETIME NOT NULL COMMENT 'UTC',
+  open DECIMAL(16,6) NOT NULL,
+  high DECIMAL(16,6) NOT NULL,
+  low DECIMAL(16,6) NOT NULL,
+  last DECIMAL(16,6) NOT NULL,
+  volume BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (ticker, ts),
+  KEY idx_ts (ts)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
