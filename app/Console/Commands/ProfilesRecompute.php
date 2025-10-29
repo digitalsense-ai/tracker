@@ -116,8 +116,8 @@ class ProfilesRecompute extends Command
             //     $this->line("Aggregating PID={$pid} window={$start}..{$end}");   
             // }
 
-            /*Path 1*/            
-            $base = DB::table('simulated_trades as s')->whereNotNull('s.strategy_profile_id');
+            /*SCHEMA NO JOIN*/
+            $base = DB::table($table . ' as s')->whereNotNull('s.strategy_profile_id');
 
             $profileIds = (clone $base)
                 ->select('s.strategy_profile_id')
@@ -130,11 +130,19 @@ class ProfilesRecompute extends Command
                 $rows = (clone $base)
                     ->where('s.strategy_profile_id', $pid)
                     ->when($days > 0, fn($q) => $q->whereBetween(DB::raw("s.`$ts`"), [$start, $end]))
-                    ->select(['s.id','s.ticker', DB::raw("s.`$ts` as ts"),'s.entry_price','s.exit_price'])
+                    ->select([
+                        's.id',
+                        's.ticker',
+                        DB::raw("s.`$ts` as ts"),
+                        's.entry_price',
+                        's.exit_price',
+                        // 's.result', // optional win flag if you use it
+                    ])
                     ->get();
 
                 $trades = $rows->count();
                 $totalPnl = 0.0; $wins = 0;
+
                 foreach ($rows as $r) {
                     $entry = $r->entry_price !== null ? (float)$r->entry_price : null;
                     $exit  = $r->exit_price  !== null ? (float)$r->exit_price  : null;
@@ -142,58 +150,29 @@ class ProfilesRecompute extends Command
                     $totalPnl += $p;
                     if ($p > 0) $wins++;
                 }
+
                 $winRate = $trades ? $wins / $trades * 100.0 : 0.0;
                 $minTs = $rows->min('ts');
                 $maxTs = $rows->max('ts');
 
                 DB::table('profile_results')->updateOrInsert(
-                    ['strategy_profile_id' => $pid,'window_start' => $minTs,'window_end' => $maxTs],
-                    ['trades'=>$trades,'pnl'=>$totalPnl,'win_rate'=>$winRate,'updated_at'=>now(),'created_at'=>now()]
+                    [
+                        'strategy_profile_id' => $pid,
+                        'window_start' => $minTs,
+                        'window_end'   => $maxTs,
+                    ],
+                    [
+                        'trades'     => $trades,
+                        'pnl'        => $totalPnl,
+                        'win_rate'   => $winRate,
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
                 );
+
+                $this->line(sprintf("PID=%s agg: n=%d pnl=%.2f win%%=%.2f", $pid, $trades, $totalPnl, $winRate));
             }
-            
-
-            /*Path 2*/
-            /*
-            $joinKey = 'trade_id'; // set to the actual FK column on simulated_trades
-
-            $base = DB::table('simulated_trades as s')
-                ->join('trades as t', 't.id', '=', DB::raw("s.`$joinKey`"))
-                ->whereNotNull('t.strategy_profile_id');
-
-            $profileIds = (clone $base)
-                ->select('t.strategy_profile_id')
-                ->distinct()
-                ->orderBy('t.strategy_profile_id')
-                ->pluck('t.strategy_profile_id')
-                ->all();
-
-            foreach ($profileIds as $pid) {
-                $rows = (clone $base)
-                    ->where('t.strategy_profile_id', $pid)
-                    ->when($days > 0, fn($q) => $q->whereBetween(DB::raw("s.`$ts`"), [$start, $end]))
-                    ->select(['s.id','s.ticker', DB::raw("s.`$ts` as ts"),'s.entry_price','s.exit_price','s.result'])
-                    ->get();
-
-                $trades = $rows->count();
-                $totalPnl = 0.0; $wins = 0;
-                foreach ($rows as $r) {
-                    $entry = $r->entry_price !== null ? (float)$r->entry_price : null;
-                    $exit  = $r->exit_price  !== null ? (float)$r->exit_price  : null;
-                    $p = (!is_null($entry) && !is_null($exit)) ? ($exit - $entry) : 0.0;
-                    $totalPnl += $p;
-                    if ($p > 0) $wins++;
-                }
-                $winRate = $trades ? $wins / $trades * 100.0 : 0.0;
-                $minTs = $rows->min('ts');
-                $maxTs = $rows->max('ts');
-
-                DB::table('profile_results')->updateOrInsert(
-                    ['strategy_profile_id'=>$pid,'window_start'=>$minTs,'window_end'=>$maxTs],
-                    ['trades'=>$trades,'pnl'=>$totalPnl,'win_rate'=>$winRate,'updated_at'=>now(),'created_at'=>now()]
-                );
-            }
-            */
+            /*SCHEMA NO JOIN*/
         } else {
             $base = DB::table($table)->whereNotNull('strategy_profile_id');
         

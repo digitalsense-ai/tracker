@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
@@ -9,29 +8,36 @@ class ProfileLeaderboardController extends Controller
 {
     public function index(Request $request)
     {
-        $days = (int) $request->query('days', 0);
+        $days = (int) $request->query('days', 10);
 
         $base = DB::table('profile_results as r')
             ->join('strategy_profiles as p', 'p.id', '=', 'r.strategy_profile_id');
 
-        if ($days === 0) {
+        if ($days > 0) {
+            $end   = now();
+            $start = now()->subDays($days)->startOfDay();
+
+            $base->whereBetween(
+                DB::raw('COALESCE(r.window_end, r.updated_at, r.created_at)'),
+                [$start, $end]
+            );
+        } else {
+            // latest row per profile
             $sub = DB::table('profile_results')
-                ->select('strategy_profile_id', DB::raw('MAX(COALESCE(window_end, updated_at, created_at)) as latest_end'))
+                ->select(
+                    'strategy_profile_id',
+                    DB::raw('MAX(COALESCE(window_end, updated_at, created_at)) as latest_end')
+                )
                 ->groupBy('strategy_profile_id');
 
             $base->joinSub($sub, 'mx', function ($join) {
                 $join->on('mx.strategy_profile_id', '=', 'r.strategy_profile_id');
             })
             ->whereRaw('COALESCE(r.window_end, r.updated_at, r.created_at) = mx.latest_end');
-        } else {
-            $end   = now();
-            $start = now()->subDays($days)->startOfDay();
-
-            $base->whereBetween(DB::raw('COALESCE(r.window_end, r.updated_at, r.created_at)'), [$start, $end]);
         }
 
         $rows = $base->select([
-                'p.id as profile_id',
+                'p.code',
                 'p.name',
                 'r.trades',
                 'r.pnl',
