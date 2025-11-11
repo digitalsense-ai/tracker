@@ -50,6 +50,23 @@ Route::get('/models/{model}/edit', [ModelsController::class, 'edit'])->name('mod
 Route::put('/models/{model}', [ModelsController::class, 'update'])->name('models.update');
 Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.show');
 
+// Route::get('/test-ai-model', function () {
+//     $m = \App\Models\AiModel::first() ?? new \App\Models\AiModel([
+//         'name' => 'DeepSeek V3.1',
+//         'slug' => 'deepseek-v31',
+//     ]);
+
+//     $m->equity = 100000;
+//     $m->cash = 100000;
+//     $m->risk_pct = 0.5;
+//     $m->check_interval_min = 1;
+//     $m->loop_prompt = 'Every call, return JSON with {action, orders[], notes}. Prefer OPEN/CLOSE/ADJUST/HOLD. Orders need ticker, side, entry, stop, target.';
+//     $m->save();
+
+//     return 'Saved';
+// });
+
+
 /**
  * RESCUED web.php (Patch16C)
  * - Original file moved to routes/web.php.broken_<timestamp>
