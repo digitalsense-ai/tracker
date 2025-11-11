@@ -48,6 +48,7 @@
     </div>
   </section>
 
+  {{--
   <section class="card" style="margin-top:16px">
     <div class="card-header"><div class="bold">Last 25 Trades</div></div>
     <div class="card-body">
@@ -70,5 +71,20 @@
         </tbody>
       </table>
     </div>
+  </section>
+  --}}
+
+  <section class="card" style="margin-top:16px">
+      <div class="card-header"><div class="bold">Model Chat (decisions)</div></div>
+      <div class="card-body">
+        @forelse(($logs ?? []) as $log)
+          <div class="card" style="padding:8px;margin-bottom:8px">
+            <div class="small">{{ $log->created_at->format('Y-m-d H:i:s') }} — Action: <b>{{ $log->action ?? '#' }}</b></div>
+            <pre style="white-space:pre-wrap;font-size:12px">{{ json_encode($log->payload, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES) }}</pre>
+          </div>
+        @empty
+          <div class="small">No decisions yet.</div>
+        @endforelse
+      </div>
   </section>
 @endsection

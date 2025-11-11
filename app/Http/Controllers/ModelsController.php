@@ -42,8 +42,12 @@ class ModelsController extends Controller
 
     public function show(string $slug)
     {
+        //$model = AiModel::where('slug',$slug)->firstOrFail();
+        //return view('models.show', compact('model'));
+
         $model = AiModel::where('slug',$slug)->firstOrFail();
-        return view('models.show', compact('model'));
+        $logs  = \App\Models\ModelLog::where('ai_model_id',$model->id)->latest()->limit(25)->get();
+        return view('models.show', compact('model','logs'));
     }
 
     private function validated(Request $req, $ignoreId = null): array

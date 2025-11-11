@@ -47,6 +47,8 @@ class Kernel extends ConsoleKernel
              ->weekdays()
              ->at('23:30')
              ->appendOutputTo(storage_path('logs/nyopen.log'));
+
+        $schedule->command('ai:tick')->everyMinute();
     }
 
     /**
