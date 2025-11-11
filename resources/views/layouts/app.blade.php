@@ -1,25 +1,35 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tracker</title>
-  <link rel="stylesheet" href="/css/tracker-light.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>@yield('title','Alpha Arena')</title>
+  <link rel="stylesheet" href="{{ asset('assets/style.css') }}">
+  <meta name="robots" content="noindex">
 </head>
-<body class="tracker">
-  <div class="container">
-    <ul class="nav top">
-      <li><a href="/status">Status</a></li>
-      <li><a href="/dashboard">Dashboard</a></li>
-      <li><a href="/kpi">KPI</a></li>
-      <li><a href="/results">Results</a></li>
-      <li><a href="/backtest">Backtest</a></li>
-      <li><a href="/explainer-flow">Explainer Flow</a></li>
-      <li><a href="/signals">Signals</a></li>
-      <li><a href="/settings">Settings</a></li>
-      <li><a href="/profiles">Profiles</a></li>
-    </ul>
-    @yield('content')
+<body>
+<header>
+  <div class="container topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <div class="bold">@yield('header_title','Alpha Arena')</div>
+        <div class="small">Mock UI · replace # with live fields</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="{{ route('live.index') }}" class="{{ request()->routeIs('live.index') ? 'active' : '' }}">Live</a>
+      <a href="{{ route('profiles.leaderboard') }}" class="{{ request()->routeIs('profiles.leaderboard') ? 'active' : '' }}">Leaderboard</a>
+      <a href="{{ route('models.index') }}" class="{{ request()->routeIs('models.*') ? 'active' : '' }}">Models</a>
+    </nav>
   </div>
+</header>
+
+<main class="container">
+  @yield('content')
+  <div class="footer-note">Deploy-ready · Replace all <b>#</b> with live values.</div>
+</main>
+
+<script src="{{ asset('assets/app.js') }}"></script>
 </body>
 </html>

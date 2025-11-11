@@ -12,6 +12,9 @@ use App\Http\Controllers\ProfilesController;
 use App\Http\Controllers\ProfilesRunController;
 use App\Http\Controllers\Profiles\LeaderboardController;
 
+use App\Http\Controllers\LiveController;
+use App\Http\Controllers\ModelsController;
+
 Route::get('/', function () {
     return redirect('/dashboard');
 });
@@ -35,6 +38,17 @@ Route::get('/settings', [SettingsController::class, 'index'])->name('settings.in
 Route::post('/settings', [SettingsController::class, 'update'])->name('settings.update');
 
 Route::get('/profiles/leaderboard', [LeaderboardController::class, 'index'])->name('profiles.leaderboard');
+
+Route::get('/', [LiveController::class, 'index'])->name('live.index');
+Route::get('/profiles/leaderboard', [ProfilesController::class, 'leaderboard'])->name('profiles.leaderboard');
+Route::get('/profiles/{slug}', [ProfilesController::class, 'show'])->name('profiles.show');
+
+Route::get('/models', [ModelsController::class, 'index'])->name('models.index');
+Route::get('/models/create', [ModelsController::class, 'create'])->name('models.create');
+Route::post('/models', [ModelsController::class, 'store'])->name('models.store');
+Route::get('/models/{model}/edit', [ModelsController::class, 'edit'])->name('models.edit');
+Route::put('/models/{model}', [ModelsController::class, 'update'])->name('models.update');
+Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.show');
 
 /**
  * RESCUED web.php (Patch16C)

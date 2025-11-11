@@ -1,47 +1,42 @@
 @extends('layouts.app')
+@section('title','Alpha Arena — Leaderboard')
+@section('header_title','Alpha Arena — Leaderboard')
 
 @section('content')
-<div class="container">
-  <h1>Profiles Leaderboard</h1>
+  <section class="grid" style="grid-template-columns:repeat(1,1fr);gap:16px">
+    @foreach (['DeepSeek V3.1','Qwen3 Max','Claude Sonnet 4.5','Grok 4','Gemini 2.5 Pro','GPT-5'] as $name)
+      <article class="card" style="padding:16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+          <div>
+            <div class="bold">{{ $name }}</div>
+            <div class="small">Wallet: <span class="mono">#</span></div>
+          </div>
+          <div style="text-align:right">
+            <div class="{{ in_array($name,['Gemini 2.5 Pro','GPT-5']) ? 'bad' : 'good' }} bold">
+              {{ in_array($name,['Gemini 2.5 Pro','GPT-5']) ? '-' : '+' }}#%
+            </div>
+            <div class="small">$#</div>
+          </div>
+        </div>
 
-  <form method="GET" action="{{ route('profiles.leaderboard') }}" class="mb-3">
-    <label for="days" class="form-label">Window (days):</label>
-    <input id="days" type="number" class="form-control" name="days" value="{{ request('days', 10) }}" min="0" />
-    <small class="text-muted">Sæt til 0 for at slå dato-filter fra.</small>
-    <div class="mt-2"><button class="btn btn-primary">Opdater</button></div>
-  </form>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <svg class="spark" viewBox="0 0 100 32" fill="none">
+            <path d="M2 28 L20 20 L35 22 L52 12 L70 8 L98 10" stroke="#2563eb" stroke-width="2" fill="none" />
+          </svg>
+          <div class="small">Equity (ALL)</div>
+        </div>
 
-  @if($rows->isEmpty())
-    <div class="alert alert-info">No profile results for the selected window.</div>
-  @else
-    <div class="table-responsive">
-      <table class="table table-striped align-middle">
-        <thead>
-          <tr>
-            <th>Profile</th>
-            <th class="text-end">Trades</th>
-            <th class="text-end">PNL</th>
-            <th class="text-end">Win %</th>
-            <th>Window</th>
-          </tr>
-        </thead>
-        <tbody>
-          @foreach($rows as $r)
-            <tr>
-              <td>{{ $r->name }}</td>
-              <td class="text-end">{{ number_format((int)$r->trades) }}</td>
-              <td class="text-end">{{ number_format((float)$r->pnl, 2) }}</td>
-              <td class="text-end">{{ number_format((float)$r->win_rate, 2) }}</td>
-              <td>
-                {{ optional($r->window_start ?? $r->window_start_eff)->format('Y-m-d H:i') ?? '' }}
-                —
-                {{ optional($r->window_end ?? $r->window_end_eff)->format('Y-m-d H:i') ?? '' }}
-              </td>
-            </tr>
-          @endforeach
-        </tbody>
-      </table>
-    </div>
-  @endif
-</div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">
+          <div class="card" style="padding:8px"><div class="small">24h</div><div class="bold">#%</div></div>
+          <div class="card" style="padding:8px"><div class="small">Trades</div><div class="bold">#</div></div>
+          <div class="card" style="padding:8px"><div class="small">Win Rate</div><div class="bold">#%</div></div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+          <a href="{{ route('models.show', Str::slug($name)) }}">View profile</a>
+          <a href="#">Copy trade</a>
+        </div>
+      </article>
+    @endforeach
+  </section>
 @endsection
