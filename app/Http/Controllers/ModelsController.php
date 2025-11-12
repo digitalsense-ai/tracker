@@ -3,6 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\AiModel;
+use App\Models\Position;
+use App\Models\Trade;
+use App\Models\ModelLog;
+
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -40,14 +44,44 @@ class ModelsController extends Controller
         return back()->with('ok','Updated');
     }
 
+    // public function show(string $slug)
+    // {
+    //     //$model = AiModel::where('slug',$slug)->firstOrFail();
+    //     //return view('models.show', compact('model'));
+
+    //     $model = AiModel::where('slug',$slug)->firstOrFail();
+    //     $logs  = \App\Models\ModelLog::where('ai_model_id',$model->id)->latest()->limit(25)->get();
+    //     return view('models.show', compact('model','logs'));
+    // }
+
     public function show(string $slug)
     {
-        //$model = AiModel::where('slug',$slug)->firstOrFail();
-        //return view('models.show', compact('model'));
-
         $model = AiModel::where('slug',$slug)->firstOrFail();
-        $logs  = \App\Models\ModelLog::where('ai_model_id',$model->id)->latest()->limit(25)->get();
-        return view('models.show', compact('model','logs'));
+
+        $positions = Position::where('ai_model_id',$model->id)->where('status','open')->orderBy('opened_at','desc')->get();
+        $trades    = Trade::where('ai_model_id',$model->id)->orderBy('opened_at','desc')->limit(20)->get();
+        $logs      = ModelLog::where('ai_model_id',$model->id)->orderBy('id','desc')->limit(30)->get();
+
+        $blocked = [];
+        foreach ($logs as $log) {
+            $p = $log->payload ?? [];
+            if (isset($p['guardrails']) && $p['guardrails'] === 'blocked') {
+                $blocked[] = [
+                    'id' => $log->id,
+                    'ts' => optional($log->created_at)->toDateTimeString(),
+                    'violations' => $p['violations'] ?? [],
+                    'computed' => $p['computed'] ?? [],
+                ];
+            }
+        }
+
+        return view('ai_models.show', [
+            'm' => $model,
+            'positions' => $positions,
+            'trades' => $trades,
+            'logs' => $logs,
+            'blocked' => $blocked,
+        ]);
     }
 
     private function validated(Request $req, $ignoreId = null): array
