@@ -15,6 +15,8 @@ use App\Http\Controllers\Profiles\LeaderboardController;
 use App\Http\Controllers\LiveController;
 use App\Http\Controllers\ModelsController;
 
+//use App\Models\AiModel;
+
 Route::get('/', function () {
     return redirect('/dashboard');
 });
@@ -64,6 +66,28 @@ Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.sh
 //     $m->save();
 
 //     return 'Saved';
+// });
+
+// Route::get('/update-ai-model', function () {
+//     $m = AiModel::first();
+
+//     if (! $m) {
+//         return 'No AiModel record found.';
+//     }
+
+//     $m->start_equity = $m->equity ?? 100000;
+//     $m->peak_equity = $m->equity ?? 100000;
+//     $m->max_concurrent_trades = 5;
+//     $m->allow_same_symbol_reentry = false;
+//     $m->cooldown_minutes = 0;
+//     $m->per_trade_alloc_pct = 20;
+//     $m->max_exposure_pct = 80;
+//     $m->max_leverage = 5;
+//     $m->max_drawdown_pct = 0;
+
+//     $m->save();
+
+//     return 'AI Model updated successfully!';
 // });
 
 
