@@ -11,6 +11,8 @@ use App\Services\PaperBroker;
 use App\Services\AutoStopTP;
 use App\Services\PortfolioService;
 
+use Carbon\Carbon;
+
 class AiTick extends Command
 {
     protected $signature = 'ai:tick {--model=}';
@@ -33,7 +35,11 @@ class AiTick extends Command
         foreach ($models as $m) {
             if ($m->last_checked_at) {
                 $due = now()->subMinutes($m->check_interval_min ?? 1);
-                if ($m->last_checked_at->gt($due)) { $this->info("[{$m->slug}] skip (interval)"); continue; }
+                //if ($m->last_checked_at->gt($due)) { $this->info("[{$m->slug}] skip (interval)"); continue; }
+                if (Carbon::parse($m->last_checked_at)->gt($due)) {
+                    $this->info("[{$m->slug}] skip (interval)");
+                    continue;
+                }
             }
 
             $state = [
