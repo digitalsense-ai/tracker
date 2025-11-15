@@ -1,3 +1,8 @@
+@extends('layouts.app')
+@section('title','Models')
+@section('header_title','Models')
+
+@section('content')
 @php use Illuminate\Support\Str; @endphp
 <link rel="stylesheet" href="/css/ai.css">
 
@@ -103,3 +108,5 @@
     <div class="text-dim small">No model chat entries yet for this model.</div>
   </div>
 @endforelse
+
+@endsection

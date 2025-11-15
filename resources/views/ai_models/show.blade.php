@@ -1,3 +1,8 @@
+@extends('layouts.app')
+@section('title','Models')
+@section('header_title','Models')
+
+@section('content')
 @php use Illuminate\Support\Str; @endphp
 <link rel="stylesheet" href="/css/ai.css">
 
@@ -108,3 +113,5 @@
 </div>
 
 @include('partials.single_model_chart')
+
+@endsection

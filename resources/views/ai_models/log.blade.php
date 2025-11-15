@@ -1,3 +1,8 @@
+@extends('layouts.app')
+@section('title','Models')
+@section('header_title','Models')
+
+@section('content')
 @php use Illuminate\Support\Str; @endphp
 <link rel="stylesheet" href="/css/ai.css">
 
@@ -84,3 +89,5 @@
     row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
   }
 </script>
+
+@endsection
