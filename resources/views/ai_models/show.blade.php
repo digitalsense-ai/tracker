@@ -106,3 +106,5 @@
     </tbody>
   </table>
 </div>
+
+@include('partials.single_model_chart')

@@ -100,11 +100,25 @@ class ModelsController extends Controller
             ->limit(20)
             ->get();
 
+        // TEMP: dummy equity history until you have real snapshots
+        $startEquity = $model->start_equity ?? 10000;
+
+        $equityHistory = [
+            ['time' => '2025-10-18', 'value' => $startEquity],
+            ['time' => '2025-10-19', 'value' => $startEquity * 0.95],
+            ['time' => '2025-10-20', 'value' => $startEquity * 0.8],
+            ['time' => '2025-10-25', 'value' => $startEquity * 0.4],
+            ['time' => '2025-10-30', 'value' => $startEquity * 0.5],
+            ['time' => '2025-11-03', 'value' => $startEquity * 0.37],
+        ];
+
         return view('ai_models.show', [
-            'm' => $model,
-            'positions' => $positions,
-            'trades' => $trades,
-            'logs' => $logs,
+            'm'             => $model,
+            'positions'     => $positions,
+            'trades'        => $trades,
+            'logs'          => $logs,
+            'equityHistory' => $equityHistory,
+            'startEquity'   => $startEquity,
         ]);
     }
 
