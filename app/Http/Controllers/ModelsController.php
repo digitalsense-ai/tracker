@@ -56,31 +56,55 @@ class ModelsController extends Controller
 
     public function show(string $slug)
     {
+        // $model = AiModel::where('slug',$slug)->firstOrFail();
+
+        // $positions = Position::where('ai_model_id',$model->id)->where('status','open')->orderBy('opened_at','desc')->get();
+        // $trades    = Trade::where('ai_model_id',$model->id)->orderBy('opened_at','desc')->limit(20)->get();
+        // $logs      = ModelLog::where('ai_model_id',$model->id)->orderBy('id','desc')->limit(30)->get();
+
+        // $blocked = [];
+        // foreach ($logs as $log) {
+        //     $p = $log->payload ?? [];
+        //     if (isset($p['guardrails']) && $p['guardrails'] === 'blocked') {
+        //         $blocked[] = [
+        //             'id' => $log->id,
+        //             'ts' => optional($log->created_at)->toDateTimeString(),
+        //             'violations' => $p['violations'] ?? [],
+        //             'computed' => $p['computed'] ?? [],
+        //         ];
+        //     }
+        // }
+
+        // return view('ai_models.show', [
+        //     'm' => $model,
+        //     'positions' => $positions,
+        //     'trades' => $trades,
+        //     'logs' => $logs,
+        //     'blocked' => $blocked,
+        // ]);
+
         $model = AiModel::where('slug',$slug)->firstOrFail();
 
-        $positions = Position::where('ai_model_id',$model->id)->where('status','open')->orderBy('opened_at','desc')->get();
-        $trades    = Trade::where('ai_model_id',$model->id)->orderBy('opened_at','desc')->limit(20)->get();
-        $logs      = ModelLog::where('ai_model_id',$model->id)->orderBy('id','desc')->limit(30)->get();
+        $positions = Position::where('ai_model_id',$model->id)
+            ->where('status','open')
+            ->orderBy('opened_at','desc')
+            ->get();
 
-        $blocked = [];
-        foreach ($logs as $log) {
-            $p = $log->payload ?? [];
-            if (isset($p['guardrails']) && $p['guardrails'] === 'blocked') {
-                $blocked[] = [
-                    'id' => $log->id,
-                    'ts' => optional($log->created_at)->toDateTimeString(),
-                    'violations' => $p['violations'] ?? [],
-                    'computed' => $p['computed'] ?? [],
-                ];
-            }
-        }
+        $trades = Trade::where('ai_model_id',$model->id)
+            ->orderBy('opened_at','desc')
+            ->limit(20)
+            ->get();
+
+        $logs = ModelLog::where('ai_model_id',$model->id)
+            ->orderBy('id','desc')
+            ->limit(20)
+            ->get();
 
         return view('ai_models.show', [
             'm' => $model,
             'positions' => $positions,
             'trades' => $trades,
             'logs' => $logs,
-            'blocked' => $blocked,
         ]);
     }
 

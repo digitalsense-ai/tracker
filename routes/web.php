@@ -14,6 +14,8 @@ use App\Http\Controllers\Profiles\LeaderboardController;
 
 use App\Http\Controllers\LiveController;
 use App\Http\Controllers\ModelsController;
+use App\Http\Controllers\ModelChatController;
+use App\Http\Controllers\ModelLogController;
 
 //use App\Models\AiModel;
 
@@ -51,6 +53,9 @@ Route::post('/models', [ModelsController::class, 'store'])->name('models.store')
 Route::get('/models/{model}/edit', [ModelsController::class, 'edit'])->name('models.edit');
 Route::put('/models/{model}', [ModelsController::class, 'update'])->name('models.update');
 Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.show');
+
+Route::get('/models/{slug}/chat', [ModelChatController::class, 'index'])->name('models.chat');
+Route::get('/models/{slug}/log', [ModelLogController::class, 'index'])->name('models.log');
 
 // Route::get('/test-ai-model', function () {
 //     $m = \App\Models\AiModel::first() ?? new \App\Models\AiModel([
