@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiModel;
+
 class LiveController extends Controller
 {
     public function index()
     {
-        return view('live.index');
+    	$models = AiModel::orderByDesc('return_pct')->get();
+        return view('live.index', compact('models'));       
     }
 }

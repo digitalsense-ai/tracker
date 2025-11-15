@@ -66,6 +66,7 @@
     </aside>
   </div>
 
+  {{--
   <section class="card" style="margin-top:16px">
     <div class="card-header">
       <div class="bold">Leading Models</div>
@@ -78,6 +79,25 @@
           <div class="small">$#</div>
           <div class="{{ in_array($name,['Gemini 2.5 Pro','GPT-5']) ? 'bad' : 'good' }} bold">
             {{ in_array($name,['Gemini 2.5 Pro','GPT-5']) ? '-' : '+' }}#%
+          </div>
+        </div>
+      @endforeach
+    </div>
+  </section>
+  --}}
+
+  <section class="card" style="margin-top:16px">
+    <div class="card-header">
+      <div class="bold">Leading Models</div>
+      <div class="small">Live</div>
+    </div>
+    <div class="card-body leader-grid">      
+      @forelse($models as $m)
+        <div class="leader-item">
+          <div class="bold">{{ $m->name }}</div>
+          <div class="small">${{ number_format($m->equity ?? 0,2) }}</div>          
+          <div class="{{ ($m->return_pct ?? 0) >= 0 ? 'good' : 'bad' }} bold">  
+            {{ ($m->return_pct >= 0 ? '+' : '') . number_format($m->return_pct ?? 0,2) }}%
           </div>
         </div>
       @endforeach
