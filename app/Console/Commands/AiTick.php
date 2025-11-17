@@ -1,100 +1,148 @@
 <?php
-
 namespace App\Console\Commands;
-
 use Illuminate\Console\Command;
 use App\Models\AiModel;
 use App\Models\ModelLog;
-use App\Services\ResponsesClient;
-use App\Services\RiskManager;
-use App\Services\PaperBroker;
-use App\Services\AutoStopTP;
-use App\Services\PortfolioService;
-use App\Services\Guards\Guardrails;
-
+use App\Models\Trade;
+use App\Models\EquitySnapshot;
+use App\Services\AiDecisionParser;
 use Carbon\Carbon;
 
 class AiTick extends Command
 {
-    protected $signature = 'ai:tick {--model=}';
-    protected $description = 'Run one loop tick for active AI models (or a specific one).';
-
-    public function handle(
-        ResponsesClient $client,
-        RiskManager $risk,
-        PaperBroker $broker,
-        AutoStopTP $auto,
-        PortfolioService $portfolio,
-        Guardrails $guards
-    )
-    {
-        $query = AiModel::where('active', true);
-        if ($slug = $this->option('model')) $query->where('slug', $slug);
-
-        $models = $query->get();
-        if ($models->isEmpty()) { $this->info('No active models found.'); return Command::SUCCESS; }
-
-        foreach ($models as $m) {
-            if ($m->last_checked_at) {
-                $due = now()->subMinutes($m->check_interval_min ?? 1);
-                //if ($m->last_checked_at->gt($due)) { $this->info("[{$m->slug}] skip (interval)"); continue; }
-                if (Carbon::parse($m->last_checked_at)->gt($due)) {
-                    $this->info("[{$m->slug}] skip (interval)");
-                    continue;
+   protected $signature = 'ai:tick';
+   protected $description = 'Runs one tick for all active AI trading models';
+   public function handle()
+   {
+       $now = Carbon::now();
+       $models = AiModel::where('active', true)->get();
+       foreach ($models as $model) {
+           try {
+               // ------------------------------
+               // 1) Respect check interval
+               // ------------------------------
+               if (!empty($model->last_checked_at)) {
+                   $last = $model->last_checked_at instanceof Carbon
+                       ? $model->last_checked_at
+                       : Carbon::parse($model->last_checked_at);
+                   $interval = $model->check_interval ?? $model->check_interval_min ?? 1; // fallback
+                   $nextCheck = $last->copy()->addMinutes($interval);
+                   if ($now->lt($nextCheck)) {
+                       // Skip this model this minute
+                       continue;
+                   }
                 }
-            }
+               $this->info("Ticking model: {$model->name}");
+               // ------------------------------
+               // 2) Build AI prompt
+               // ------------------------------
+               $systemPrompt = <<<TXT
+You are an autonomous trading agent.
+Always respond ONLY with valid JSON:
+{
+ "action": "HOLD" | "OPEN" | "CLOSE",
+ "strategy": "string (short label)",
+ "reasoning": "string",
+ "orders": [
+     {
+        "symbol": "AAPL",
+        "side": "BUY" | "SELL",
+        "qty": 10,
+        "type": "MARKET"
+     }
+ ]
+}
+TXT;
+               $userPrompt = $model->loop_prompt;
+               // ------------------------------
+               // 3) CALL THE RESPONSES API HERE
+               // ------------------------------
+               // TODO: integrate your actual Responses API client:
+               // $outputText = app(ResponsesClient::class)->send($systemPrompt, $userPrompt);
+               // For now: dummy placeholder
+               $outputText = '{"action":"HOLD","strategy":"idle","reasoning":"Waiting","orders":[]}';
+               // ------------------------------
+               // 4) Parse JSON safely
+               // ------------------------------
+               $decision = AiDecisionParser::parse($outputText);
+               // ------------------------------
+               // 5) Save log (Model Chat uses this)
+               // ------------------------------
+               $log = new ModelLog();
+               $log->ai_model_id  = $model->id;
+               $log->action       = $decision['action'];
+               // $log->strategy     = $decision['strategy'];
+               // $log->thoughts     = $decision['reasoning'];
+               // $log->raw_response = $decision['raw_json'];
+               // $log->raw_request  = $userPrompt;
 
-            $state = ['equity'=>$m->equity, 'clock'=>now()->toIso8601String()];
+               $log->payload = [
+                   'strategy'  => [
+                       'name' => $decision['strategy'],
+                   ],
+                   'reasoning' => $decision['reasoning'],
+                   'orders'    => $decision['orders'],
+                   'raw'       => [
+                       'response' => json_decode($decision['raw_json'], true),
+                       'prompt'   => $userPrompt,
+                   ],
+                ];
+               $log->save();
+               // ------------------------------
+               // 6) Execute orders (OPEN/CLOSE)
+               // ------------------------------
+               if (in_array($decision['action'], ['OPEN', 'CLOSE'])) {
+                   foreach ($decision['orders'] as $order) {
+                       $symbol = $order['symbol'] ?? null;
+                       $side   = strtoupper($order['side'] ?? 'BUY');
+                       $qty    = (float)($order['qty'] ?? 0);
+                       if (! $symbol || $qty <= 0) {
+                           continue;
+                       }
+                       $trade = new Trade();
+                       $trade->ai_model_id = $model->id;
+                       $trade->symbol      = $symbol;
+                       $trade->side        = $side;
+                       $trade->qty         = $qty;
+                       $trade->status      = 'open';
+                       $trade->opened_at   = now();
+                       $trade->entry_price = 0; // replace with real feed/webhook price
+                       $trade->save();
+                   }
+               }
+               // ------------------------------
+               // 7) Update equity + snapshot
+               // ------------------------------
+               // TODO: update $model->equity based on trades / PnL logic
+               EquitySnapshot::create([
+                   'ai_model_id' => $model->id,
+                   'equity'      => $model->equity,
+                   'taken_at'    => now(),
+               ]);
+               $model->last_checked_at = now();
+               $model->save();
+           } catch (\Throwable $e) {
+               $this->error("Error in model {$model->name}: ".$e->getMessage());
+               // Important: log crash to DB (so UI can show failure)
+               // ModelLog::create([
+               //     'ai_model_id'  => $model->id,
+               //     'action'       => 'ERROR',
+               //     'strategy'     => null,
+               //     'thoughts'     => $e->getMessage(),
+               //     'raw_response' => null,
+               //     'raw_request'  => null,
+               // ]);
 
-            $decision = $client->loop($m->loop_prompt ?: 'Decide what to do.', $state);
-
-            // Basic schema validation
-            $required = ['action','orders','strategy','reasoning'];
-            $missing = [];
-            foreach ($required as $k) if (!array_key_exists($k, $decision)) $missing[]=$k;
-            if (!empty($missing)) {
-                ModelLog::create([
-                    'ai_model_id'=>$m->id,'action'=>'HOLD',
-                    'payload'=>['error'=>'invalid_response','missing'=>$missing,'raw'=>$decision]
+               ModelLog::create([
+                   'ai_model_id' => $model->id,
+                   'action'      => 'ERROR',
+                   'payload'     => [
+                       'error' => $e->getMessage(),
+                   ],
                 ]);
-                $this->warn("[{$m->slug}] Invalid AI response: missing ".implode(',',$missing));
-                $m->last_checked_at = now(); $m->save();
-                continue;
-            }
-
-            // Guardrails
-            [$ok, $violations, $computed] = $guards->validate($m, $decision);
-            if (!$ok) {
-                ModelLog::create([
-                    'ai_model_id'=>$m->id,'action'=>'HOLD',
-                    'payload'=>['guardrails'=>'blocked','violations'=>$violations,'computed'=>$computed,'decision'=>$decision]
-                ]);
-                $this->info("[{$m->slug}] HOLD (guardrails): ".implode(';',$violations));
-                $m->last_checked_at = now(); $m->save();
-                continue;
-            }
-
-            // Risk sizing
-            $orders = $decision['orders'] ?? [];
-            foreach ($orders as &$o) { $o = $risk->size($m, $o); } unset($o);
-
-            if (!empty($orders)) $broker->execute($m, $orders);
-
-            $auto->run($m);
-            $portfolio->markToMarket($m);
-
-            ModelLog::create([
-                'ai_model_id'=>$m->id,'action'=>$decision['action'] ?? 'n/a',
-                'payload'=>$decision + ['computed'=>$computed]
-            ]);
-
-            $m->last_checked_at = now();
-            if ($m->equity !== null && ($m->peak_equity ?? 0) < $m->equity) $m->peak_equity = $m->equity;
-            $m->save();
-
-            $this->info("[{$m->slug}] action=".($decision['action'] ?? 'n/a'));
-        }
-
-        return Command::SUCCESS;
-    }
+               continue;
+           }
+       }
+       return self::SUCCESS;
+   }
 }
