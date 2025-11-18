@@ -57,6 +57,12 @@ Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.sh
 Route::get('/models/{slug}/chat', [ModelChatController::class, 'index'])->name('models.chat');
 Route::get('/models/{slug}/log', [ModelLogController::class, 'index'])->name('models.log');
 
+Route::get('/leaderboard', [\App\Http\Controllers\LeaderboardController::class, 'index'])
+   ->name('leaderboard.index');
+
+Route::get('/live', [\App\Http\Controllers\LiveController::class, 'index'])
+   ->name('live.index');
+
 // Route::get('/test-ai-model', function () {
 //     $m = \App\Models\AiModel::first() ?? new \App\Models\AiModel([
 //         'name' => 'DeepSeek V3.1',

@@ -12,7 +12,8 @@ class PaperBroker
 {
     public function __construct(
         private PriceFeedInterface $feed,
-        private PortfolioService $portfolio
+        private PortfolioService $portfolio,
+        protected MarketData $marketData
     ) {}
 
     public function execute(AiModel $model, array $orders): void
@@ -100,4 +101,138 @@ class PaperBroker
         ]);
         return ['ok'=>true,'type'=>'adjust'];
     }
+
+    /**
+    * Process a decision from the AI for a single model.
+    * $decision is what AiDecisionParser::parse() returns.
+    */
+   public function processDecision(AiModel $model, array $decision): void
+   {
+       $action = $decision['action'] ?? 'HOLD';
+       $orders = $decision['orders'] ?? [];
+       if (!in_array($action, ['OPEN', 'CLOSE'])) {
+           // HOLD: no structural changes, just keep equity as is
+           $this->recalculateEquity($model);
+           return;
+       }
+       foreach ($orders as $order) {
+           $symbol = $order['symbol'] ?? null;
+           $side   = strtoupper($order['side'] ?? 'BUY');
+           $qty    = (float) ($order['qty'] ?? 0);
+           if (!$symbol || $qty <= 0) {
+               continue;
+           }
+           if ($action === 'OPEN') {
+               $this->openPosition($model, $symbol, $side, $qty);
+           } elseif ($action === 'CLOSE') {
+               $this->closePositionBySymbol($model, $symbol);
+           }
+       }
+       $this->recalculateEquity($model);
+   }
+
+   protected function openPosition(AiModel $model, string $symbol, string $side, float $qty): void
+   {
+       $price = $this->marketData->getPrice($symbol);
+       // Either create a new position or add to existing one
+       $position = Position::where('ai_model_id', $model->id)
+           ->where('ticker', $symbol)
+           ->where('status', 'open')
+           ->first();
+       if ($position) {
+           // increase position (simple average price)
+           $totalQty   = $position->qty + $qty;
+           $newAvg     = ($position->avg_price * $position->qty + $price * $qty) / $totalQty;
+           $position->qty       = $totalQty;
+           $position->avg_price = $newAvg;
+           $position->save();
+       } else {
+           $position = new Position();
+           $position->ai_model_id = $model->id;
+           $position->ticker      = $symbol;
+           $position->side        = $side;
+           $position->qty         = $qty;
+           $position->avg_price   = $price;
+           $position->status      = 'open';
+           $position->opened_at   = now();
+           $position->save();
+       }
+       // log an "open trade" for history
+       $trade = new Trade();
+       $trade->ai_model_id = $model->id;
+       $trade->symbol      = $symbol;
+       $trade->side        = $side;
+       $trade->qty         = $qty;
+       $trade->entry_price = $price;       
+       $trade->opened_at   = now();
+       $trade->save();
+   }
+
+   protected function closePositionBySymbol(AiModel $model, string $symbol): void
+   {
+       $position = Position::where('ai_model_id', $model->id)
+           ->where('ticker', $symbol)
+           ->where('status', 'open')
+           ->first();
+       if (!$position) {
+           return;
+       }
+       $exitPrice = $this->marketData->getPrice($symbol);
+       // Close any open trades for that symbol as well
+       $openTrades = Trade::where('ai_model_id', $model->id)
+                       ->where('symbol', $symbol)
+                       ->whereNull('closed_at')
+                       ->get();
+       foreach ($openTrades as $trade) {
+           $netPnl = $this->calculateNetPnl(
+               $trade->side,
+               $trade->qty,
+               $trade->entry_price,
+               $exitPrice
+           );
+           $trade->exit_price = $exitPrice;
+           $trade->net_pnl    = $netPnl;           
+           $trade->closed_at  = now();
+           $trade->save();
+       }
+       // Mark position as closed
+       $position->status       = 'closed';
+       $position->closed_at    = now();
+       $position->unrealized_pnl = 0;
+       $position->save();
+   }
+
+   protected function calculateNetPnl(string $side, float $qty, float $entry, float $exit): float
+   {
+       $direction = strtoupper($side) === 'SELL' ? -1 : 1;
+       return ($exit - $entry) * $qty * $direction;
+   }
+
+   /**
+    * Recompute equity as:
+    * start_equity + realized_pnl + unrealized_pnl
+    */
+   public function recalculateEquity(AiModel $model): void
+   {
+       $start = (float) ($model->start_equity ?? 0);
+       // Realized PnL = sum of closed trades
+       $realized = (float) Trade::where('ai_model_id', $model->id)
+                       ->whereNotNull('closed_at')
+                       ->sum('net_pnl');
+       // Unrealized PnL = open positions at current price
+       $unrealized = 0.0;
+       $openPositions = Position::where('ai_model_id', $model->id)
+           ->where('status', 'open')
+           ->get();
+       foreach ($openPositions as $p) {
+           $price = $this->marketData->getPrice($p->ticker);
+           $direction = strtoupper($p->side) === 'SELL' ? -1 : 1;
+           $pnl = ($price - $p->avg_price) * $p->qty * $direction;
+           $p->unrealized_pnl = $pnl;
+           $p->save();
+           $unrealized += $pnl;
+       }
+       $model->equity = $start + $realized + $unrealized;
+       $model->save();
+   }
 }

@@ -15,4 +15,19 @@ class AiModel extends Model
         'active' => 'bool',
         'tags'   => 'array',
     ];
+
+    public function positions()
+	{
+	   return $this->hasMany(\App\Models\Position::class, 'ai_model_id');
+	}
+
+	public function trades()
+	{
+	   return $this->hasMany(\App\Models\Trade::class, 'ai_model_id');
+	}
+	
+	public function equitySnapshots()
+	{
+	   return $this->hasMany(\App\Models\EquitySnapshot::class, 'ai_model_id');
+	}
 }

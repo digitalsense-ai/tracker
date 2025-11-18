@@ -1,13 +1,17 @@
 <?php
 namespace App\Console\Commands;
+
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+
 use App\Models\AiModel;
 use App\Models\ModelLog;
 use App\Models\Trade;
 use App\Models\EquitySnapshot;
 use App\Models\Position;
 use App\Services\AiDecisionParser;
+use App\Services\PaperBroker;
+
 use Carbon\Carbon;
 class AiTick extends Command
 {
@@ -17,6 +21,8 @@ class AiTick extends Command
    {
        $now = Carbon::now();
        $models = AiModel::where('active', true)->get();
+       $broker = app(PaperBroker::class);
+
        foreach ($models as $model) {
            try {
                // ------------------------------
@@ -227,28 +233,44 @@ TXT;
                    ],
                ];
                $log->save();
+               // // ------------------------------
+               // // 7) Execute orders (OPEN/CLOSE)
+               // // ------------------------------
+               // if (in_array($decision['action'], ['OPEN', 'CLOSE'])) {
+               //     foreach ($decision['orders'] as $order) {
+               //         $symbol = $order['symbol'] ?? null;
+               //         $side   = strtoupper($order['side'] ?? 'BUY');
+               //         $qty    = (float)($order['qty'] ?? 0);
+               //         if (!$symbol || $qty <= 0) {
+               //             continue;
+               //         }
+               //         $trade = new Trade();
+               //         $trade->ai_model_id = $model->id;
+               //         $trade->symbol      = $symbol;
+               //         $trade->side        = $side;
+               //         $trade->qty         = $qty;
+               //         $trade->status      = 'open';
+               //         $trade->opened_at   = now();
+               //         $trade->entry_price = 0; // replace with real feed/webhook price
+               //         $trade->save();
+               //     }
+               // }
+
                // ------------------------------
-               // 7) Execute orders (OPEN/CLOSE)
-               // ------------------------------
-               if (in_array($decision['action'], ['OPEN', 'CLOSE'])) {
-                   foreach ($decision['orders'] as $order) {
-                       $symbol = $order['symbol'] ?? null;
-                       $side   = strtoupper($order['side'] ?? 'BUY');
-                       $qty    = (float)($order['qty'] ?? 0);
-                       if (!$symbol || $qty <= 0) {
-                           continue;
-                       }
-                       $trade = new Trade();
-                       $trade->ai_model_id = $model->id;
-                       $trade->symbol      = $symbol;
-                       $trade->side        = $side;
-                       $trade->qty         = $qty;
-                       $trade->status      = 'open';
-                       $trade->opened_at   = now();
-                       $trade->entry_price = 0; // replace with real feed/webhook price
-                       $trade->save();
-                   }
-               }
+              // 7) Apply orders via PaperBroker (positions + trades + equity)
+              // ------------------------------
+              $broker->processDecision($model, $decision);
+              // ------------------------------
+              // 8) Snapshot equity AFTER broker updates it
+              // ------------------------------
+              EquitySnapshot::create([
+                 'ai_model_id' => $model->id,
+                 'equity'      => $model->equity,
+                 'taken_at'    => now(),
+              ]);
+              $model->last_checked_at = now();
+              $model->save();
+
                // ------------------------------
                // 8) Update equity + snapshot
                // ------------------------------
