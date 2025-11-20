@@ -58,16 +58,16 @@ class AiTick extends Command
                    $grossExposure += abs($notional);
                }
                $openExposurePct = $equity > 0 ? ($grossExposure / $equity) * 100.0 : 0.0;
-               // Risk / guardrail fields (adjust names if your columns differ)
-               $riskLimits = [
-                   'max_concurrent_positions'   => (int)   ($model->max_concurrent_trades ?? 5),
-                   'allow_same_symbol_reentry'  => (bool)  ($model->allow_same_symbol_reentry ?? false),
-                   'cooldown_minutes'           => (int)   ($model->cooldown_minutes ?? 0),
-                   'per_trade_alloc_pct'        => (float) ($model->per_trade_alloc_pct ?? 20),
-                   'max_exposure_pct'           => (float) ($model->max_exposure_pct ?? 80),
-                   'max_leverage'               => (float) ($model->max_leverage ?? 5),
-                   'max_drawdown_pct'           => (float) ($model->max_drawdown_pct ?? 0),
-               ];
+               // // Risk / guardrail fields (adjust names if your columns differ)
+               // $riskLimits = [
+               //     'max_concurrent_positions'   => (int)   ($model->max_concurrent_trades ?? 5),
+               //     'allow_same_symbol_reentry'  => (bool)  ($model->allow_same_symbol_reentry ?? false),
+               //     'cooldown_minutes'           => (int)   ($model->cooldown_minutes ?? 0),
+               //     'per_trade_alloc_pct'        => (float) ($model->per_trade_alloc_pct ?? 20),
+               //     'max_exposure_pct'           => (float) ($model->max_exposure_pct ?? 80),
+               //     'max_leverage'               => (float) ($model->max_leverage ?? 5),
+               //     'max_drawdown_pct'           => (float) ($model->max_drawdown_pct ?? 0),
+               // ];
                // Normalize open positions for the AI
                $openPositionsState = $openPositions->map(function (Position $p) {
                    return [
@@ -105,7 +105,7 @@ class AiTick extends Command
                    ],
                    'time'              => now()->toIso8601String(),
                    'open_exposure_pct' => $openExposurePct,
-                   'risk_limits'       => $riskLimits,
+                   //'risk_limits'       => $riskLimits,
                    'open_positions'    => $openPositionsState,
                    'recent_trades'     => $recentTradesState,
                ];

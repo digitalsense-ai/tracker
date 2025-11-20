@@ -13,6 +13,8 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\BacktestGridCommand::class,
         \App\Console\Commands\SimulateV5::class,
         \App\Console\Commands\ProfilesRecompute::class,
+        \App\Console\Commands\BacktestSimulateCommand::class,
+        \App\Console\Commands\AiTick::class,
     ];
 
     /**
@@ -61,6 +63,3 @@ class Kernel extends ConsoleKernel
         require base_path('routes/console.php');
     }
 }
-protected $commands = [
-    \App\Console\Commands\BacktestSimulateCommand::class,
-];
