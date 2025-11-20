@@ -10,10 +10,14 @@
         <div class="small">Current <b>$#</b></div>
       </div>
       <div class="card-body">
+        {{--
         <svg class="spark" viewBox="0 0 100 28" fill="none">
           <path d="M2 26 L20 20 L35 22 L52 12 L70 8 L98 10" stroke="#2563eb" stroke-width="2" fill="none" />
         </svg>
         <div class="small">ALL • $ / % toggles (#)</div>
+        --}}
+        <div id="equity-chart" style="height:380px;"></div>
+        @include('partials.all_model_chart')
       </div>
     </section>
 

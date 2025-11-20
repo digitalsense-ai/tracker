@@ -24,7 +24,8 @@ class LiveController extends Controller
        /** @var array<string,array{time:string,value:float}> $totalSeries */
        $totalSeries = [];
        foreach ($allSnapshots as $s) {
-           $t = $s->taken_at->format('Y-m-d H:i:00'); // round to minute
+           //$t = $s->taken_at->format('Y-m-d H:i:00'); // round to minute
+           $t = $s->taken_at->format('Y-m-d'); // round to minute
            if (!isset($totalSeries[$t])) {
                $totalSeries[$t] = ['time' => $t, 'value' => 0.0];
            }
