@@ -41,6 +41,10 @@ class ModelsController extends Controller
         $data = $this->validated($req, $model->id);
         if (!$model->slug) $data['slug'] = Str::slug($data['name']);
         $model->update($data);
+
+        $model->active = (isset($data->active)) ? 1 : 0;
+        $model->save();
+        
         return back()->with('ok','Updated');
     }
 

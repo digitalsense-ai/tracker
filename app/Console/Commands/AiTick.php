@@ -284,6 +284,10 @@ TXT;
                $model->save();
            } catch (\Throwable $e) {
                $this->error("Error in model {$model->name}: " . $e->getMessage());
+
+               $model->last_checked_at = now();
+               $model->save();
+               
                ModelLog::create([
                    'ai_model_id' => $model->id,
                    'action'      => 'ERROR',
