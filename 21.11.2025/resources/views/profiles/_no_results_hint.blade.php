@@ -1,0 +1,1 @@
+<p>No profile results yet. Run php artisan profiles:backtest-v2</p>

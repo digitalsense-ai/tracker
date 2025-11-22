@@ -44,6 +44,75 @@
       </div>
     </section>
 
+
+    <section class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+
+      <div class="card" style="padding:16px">
+        <div class="bold" style="margin-bottom:6px">Pre-Market Prompt</div>
+        <textarea name="premarket_prompt" rows="10" class="table" style="width:100%;padding:8px">{{ old('premarket_prompt',$model->premarket_prompt) }}</textarea>
+        <div class="small" style="margin-top:6px">
+          This is the <b>big planning prompt</b> that runs before the market opens and builds today&apos;s strategy playbook based on news, trends, funding, and your risk rules.
+        </div>
+      </div>
+
+      <div class="card" style="padding:16px">
+        <div class="bold" style="margin-bottom:6px">Pre-Market &amp; Loop Settings</div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="bold">Pre-Market Run Time (HH:MM)</label>
+            <input name="premarket_run_time" value="{{ old('premarket_run_time',$model->premarket_run_time) }}" class="table" style="width:100%;padding:8px" placeholder="09:00">
+            <div class="small text-dim">When the scheduler should run the pre-market plan (app timezone).</div>
+          </div>
+          <div>
+            <label class="bold">Max Strategies per Day</label>
+            <input name="max_strategies_per_day" type="number" min="0" step="1" value="{{ old('max_strategies_per_day',$model->max_strategies_per_day) }}" class="table" style="width:100%;padding:8px" placeholder="6">
+          </div>
+          <div>
+            <label class="bold">Max Symbols per Day</label>
+            <input name="max_symbols_per_day" type="number" min="0" step="1" value="{{ old('max_symbols_per_day',$model->max_symbols_per_day) }}" class="table" style="width:100%;padding:8px" placeholder="5">
+          </div>
+          <div>
+            <label class="bold">Default Risk per Strategy (%)</label>
+            <input name="default_risk_per_strategy_pct" type="number" min="0" max="100" step="0.1" value="{{ old('default_risk_per_strategy_pct',$model->default_risk_per_strategy_pct) }}" class="table" style="width:100%;padding:8px" placeholder="1.0">
+          </div>
+          <div>
+            <label class="bold">Allow Sleeper Strategies</label>
+            <select name="allow_sleeper_strategies" class="table" style="width:100%;padding:8px">
+              <option value="" {{ old('allow_sleeper_strategies',$model->allow_sleeper_strategies) === null ? 'selected' : '' }}>Use default</option>
+              <option value="1" {{ old('allow_sleeper_strategies',$model->allow_sleeper_strategies) ? 'selected' : '' }}>Yes</option>
+              <option value="0" {{ old('allow_sleeper_strategies',$model->allow_sleeper_strategies) === 0 ? 'selected' : '' }}>No</option>
+            </select>
+          </div>
+          <div>
+            <label class="bold">Allow Activating Sleepers (Loop)</label>
+            <select name="allow_activate_sleepers" class="table" style="width:100%;padding:8px">
+              <option value="" {{ old('allow_activate_sleepers',$model->allow_activate_sleepers) === null ? 'selected' : '' }}>Use default</option>
+              <option value="1" {{ old('allow_activate_sleepers',$model->allow_activate_sleepers) ? 'selected' : '' }}>Yes</option>
+              <option value="0" {{ old('allow_activate_sleepers',$model->allow_activate_sleepers) === 0 ? 'selected' : '' }}>No</option>
+            </select>
+          </div>
+          <div>
+            <label class="bold">Allow Early Exit on Invalidation</label>
+            <select name="allow_early_exit_on_invalidation" class="table" style="width:100%;padding:8px">
+              <option value="" {{ old('allow_early_exit_on_invalidation',$model->allow_early_exit_on_invalidation) === null ? 'selected' : '' }}>Use default</option>
+              <option value="1" {{ old('allow_early_exit_on_invalidation',$model->allow_early_exit_on_invalidation) ? 'selected' : '' }}>Yes</option>
+              <option value="0" {{ old('allow_early_exit_on_invalidation',$model->allow_early_exit_on_invalidation) === 0 ? 'selected' : '' }}>No</option>
+            </select>
+          </div>
+          <div>
+            <label class="bold">Max Adds per Position</label>
+            <input name="max_adds_per_position" type="number" min="0" max="10" step="1" value="{{ old('max_adds_per_position',$model->max_adds_per_position) }}" class="table" style="width:100%;padding:8px" placeholder="0">
+          </div>
+          <div>
+            <label class="bold">Min Price Move to Trigger Loop (%)</label>
+            <input name="loop_min_price_move_pct" type="number" min="0" max="100" step="0.01" value="{{ old('loop_min_price_move_pct',$model->loop_min_price_move_pct) }}" class="table" style="width:100%;padding:8px" placeholder="0.30">
+            <div class="small text-dim">Optional: if price change since last decision is smaller than this, you can skip the AI call to save tokens.</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
     <section class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
       <div class="card" style="padding:16px">
         <div class="bold" style="margin-bottom:6px">Start Prompt</div>

@@ -1,0 +1,48 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('simulated_trades', function (Blueprint $table) {            
+            $table->decimal('entry_price', 10, 2)->nullable()->after('status');
+            $table->decimal('sl_price', 10, 2)->nullable();
+            $table->decimal('tp1_price', 10, 2)->nullable();
+            $table->decimal('tp2_price', 10, 2)->nullable();
+            $table->decimal('tp3_price', 10, 2)->nullable();
+            $table->decimal('exit_price', 10, 2)->nullable();
+            $table->string('exit_type')->nullable();
+            $table->boolean('is_win')->default(false);
+            $table->decimal('pnl_amount', 10, 2)->nullable();
+            $table->date('date')->nullable();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('simulated_trades', function (Blueprint $table) {
+            $table->dropColumn([
+                'entry_price',
+                'sl_price',
+                'tp1_price',
+                'tp2_price',
+                'tp3_price',
+                'exit_price',
+                'exit_type',
+                'is_win',
+                'pnl_amount',
+                'date'
+            ]);
+        });
+    }
+};

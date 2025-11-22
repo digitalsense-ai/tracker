@@ -1,0 +1,9 @@
+@extends('layouts.app')
+@section('content')
+<h1>Status</h1>
+<ul>
+  <li>Datafeed: <span class="badge green">OK</span></li>
+  <li>Cron/Jobs: <span class="badge green">OK</span></li>
+  <li>Broker: <span class="badge amber">NOT CONFIGURED</span></li>
+</ul>
+@endsection

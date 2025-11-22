@@ -9,6 +9,7 @@ use App\Models\ModelLog;
 use App\Models\Trade;
 use App\Models\EquitySnapshot;
 use App\Models\Position;
+use App\Models\AiDailyPlan;
 use App\Services\AiDecisionParser;
 use App\Services\PaperBroker;
 
@@ -33,7 +34,7 @@ class AiTick extends Command
                        ? $model->last_checked_at
                        : Carbon::parse($model->last_checked_at);
                    $interval = $model->check_interval ?? $model->check_interval_min ?? 1; // fallback
-                   $nextCheck = $last->copy()->addMinutes($interval);
+                   $nextCheck = $last->copy()->addMinutes($interval);                   
                    if ($now->lt($nextCheck)) {
                        // Skip this model this minute
                        continue;
@@ -94,6 +95,26 @@ class AiTick extends Command
                        'closed_at'   => optional($t->closed_at)->toIso8601String(),
                    ];
                })->values()->all();
+
+                // Always define prices before state
+                $prices = [];
+                $marketData = app(\App\Services\MarketData::class);
+                foreach ($openPositions as $p) {
+                  $ticker = $p->ticker;
+                  if (!isset($prices[$ticker])) {
+                    $prices[$ticker] = [
+                      'last' => (float) $marketData->getPrice($ticker),
+                    ];
+                  }
+                }
+
+                // Load today\'s daily plan if it exists
+                $today = now()->toDateString();
+                $dailyPlanModel = AiDailyPlan::where('ai_model_id', $model->id)
+                   ->where('trade_date', $today)
+                   ->first();
+                $dailyPlan = $dailyPlanModel ? $dailyPlanModel->plan_json : null;
+               
                // Build state object for the AI
                $state = [
                    'model' => [
@@ -108,7 +129,28 @@ class AiTick extends Command
                    //'risk_limits'       => $riskLimits,
                    'open_positions'    => $openPositionsState,
                    'recent_trades'     => $recentTradesState,
+                   'prices'           => $prices,
+                   'daily_plan'       => $dailyPlan,
                ];
+
+               // // Attach current prices for symbols (if available)
+               // $prices = [];
+               // $marketData = app(\App\Services\MarketData::class);
+               // foreach ($openPositions as $p) {
+               //     $ticker = $p->ticker;
+               //     if (!isset($prices[$ticker])) {
+               //         $prices[$ticker] = [
+               //             'last' => (float) $marketData->getPrice($ticker),
+               //         ];
+               //     }
+               // }
+
+               // // Load today\'s daily plan if it exists
+               // $today = now()->toDateString();
+               // $dailyPlanModel = AiDailyPlan::where('ai_model_id', $model->id)
+               //     ->where('trade_date', $today)
+               //     ->first();
+               // $dailyPlan = $dailyPlanModel ? $dailyPlanModel->plan_json : null;
                $stateJson = json_encode($state, JSON_PRETTY_PRINT);
                // ------------------------------
                // 3) Build system + user prompts
@@ -116,6 +158,9 @@ class AiTick extends Command
                $systemPrompt = <<<TXT
 You are an autonomous trading agent managing a single account.
 HARD REQUIREMENTS (DO NOT VIOLATE):
+You may see a 'prices' map and a 'daily_plan' array in the state:
+- Use 'prices' to understand current market levels.
+- Use 'daily_plan' as the playbook: manage and execute those strategies instead of inventing completely new ones.
 - Only trade symbols given in the state.
 - Never exceed max_concurrent_positions.
 - Never exceed max_exposure_pct of account equity.

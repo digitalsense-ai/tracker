@@ -98,3 +98,28 @@ php artisan simulate:trades
 - [x] Cron Integration
 - [ ] Real Nordnet integration (planned)
 - [ ] Live chart embedding (planned)
+
+
+---
+
+## 🤖 AI Trading Models (Pre-Market + Loop Design)
+
+The project includes an experimental **AI model engine** for autonomous trading decisions.
+
+Each AI model can be configured under <code>/models</code> with:
+
+- <b>Pre-Market Prompt</b> – a large "planning" prompt that runs before the market opens and builds a daily strategy playbook.
+- <b>Start / Loop Prompts</b> – lighter prompts that control how the model manages trades during the day.
+- <b>Pre-Market Run Time</b> – <code>HH:MM</code> time for when the pre-market planner should run (via Laravel scheduler).
+- <b>Max Strategies / Symbols per Day</b> – soft caps to limit how many ideas the AI can propose.
+- <b>Sleeper Strategies</b> – optional strategies that only activate later in the day when price enters a defined zone.
+- <b>Risk Settings</b> – default risk per strategy, max adds per position, and whether the loop is allowed to:
+  - activate sleeper strategies
+  - exit early when an invalidation condition is met
+- <b>Loop Min Price Move (%)</b> – optional threshold to decide when it is worth calling the AI loop (to save tokens).
+
+> Implementation note: the current <code>ai:tick</code> command uses the loop prompt directly. The new pre-market fields are designed to support a 3-phase flow:
+> 1) Pre-market planning, 2) mechanical execution at open, 3) intraday loop/risk management.
+
+You can extend <code>app/Console/Commands</code> with a dedicated <code>AiPremarket</code> command that reads these settings from <code>ai_models</code> and calls your chosen LLM for plan generation.
+

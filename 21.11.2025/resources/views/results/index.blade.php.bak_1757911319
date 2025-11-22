@@ -1,0 +1,8 @@
+@extends('layouts.app')
+@section('content')
+<h1>Results</h1>
+<p>KPIs and table must be calculated over the same filtered dataset.</p>
+<table class="table"><thead><tr><th>Date</th><th>Ticker</th><th>Status</th><th>Fees</th><th>Net</th></tr></thead><tbody>
+<tr><td>2025-08-22</td><td>AAPL</td><td>closed</td><td>182.19</td><td>-182.01</td></tr>
+</tbody></table>
+@endsection

@@ -1,0 +1,22 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Http\Request;
+
+Route::post('/profiles/run', function(Request $request){
+    $days = (int)($request->input('days', 10));
+    $limit = (int)($request->input('limit', 50));
+    $cmds = ['profiles:backtest','profiles:baseline','profiles:backtest-hotfix'];
+    $out = [];
+    foreach($cmds as $c){
+        try {
+            \Artisan::call($c, ['--days'=>$days,'--limit'=>$limit]);
+            $out[] = "Ran $c\n".\Artisan::output();
+            break;
+        } catch (\Throwable $e){
+            $out[] = "Failed $c: ".$e->getMessage();
+        }
+    }
+    return response()->json(['ok'=>true,'output'=>$out]);
+})->name('profiles.run');
