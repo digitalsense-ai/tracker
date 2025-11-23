@@ -127,25 +127,52 @@ TXT;
                     throw new \RuntimeException('Missing OpenAI API key in services.openai.key');
                 }
 
-                $response = Http::withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
-                    'Content-Type'  => 'application/json',
-                ])->post('https://api.openai.com/v1/responses', [
-                    'model'  => config('services.openai.model', 'gpt-4.1-mini'),
-                    'input'  => [
-                        ['role' => 'system', 'content' => $systemPrompt],
-                        ['role' => 'user',   'content' => $userPrompt],
-                    ],
-                    'max_output_tokens' => 2048,
-                ]);
-
+                $modelName = config('services.openai.model', 'gpt-4.1-mini');
+                $apiKey = config('services.openai.key');
+                if (!$apiKey) {
+                    throw new \RuntimeException('Missing OpenAI API key in services.openai.key');
+                }
+                $response = Http::withToken($apiKey)
+                    ->timeout(20)
+                    ->post('https://api.openai.com/v1/responses', [
+                        'model' => $modelName,
+                        'input' => [
+                            [
+                                'role'    => 'system',
+                                'content' => [
+                                    [
+                                        'type' => 'input_text',
+                                        'text' => $systemPrompt,
+                                    ],
+                                ],
+                            ],
+                            [
+                                'role'    => 'user',
+                                'content' => [
+                                    [
+                                        'type' => 'input_text',
+                                        'text' => $userPrompt,
+                                    ],
+                                ],
+                            ],
+                        ],
+                        'max_output_tokens' => 2048,
+                    ]);
                 if (!$response->successful()) {
-                    throw new \RuntimeException('OpenAI API error: ' . $response->body());
+                    throw new \RuntimeException('OpenAI API error: ' . $response->status() . ' ' . $response->body());
                 }
 
                 $body = $response->json();
-                $outputText = $body['output'][0]['content'][0]['text'] ?? null;
-                if (!$outputText) {
+                $outputText = '';
+                if (!empty($body['output'][0]['content'])) {
+                    foreach ($body['output'][0]['content'] as $chunk) {
+                        if (($chunk['type'] ?? null) === 'output_text') {
+                            $outputText .= $chunk['text'] ?? '';
+                        }
+                    }
+                }
+                $outputText = trim($outputText);
+                if ($outputText === '') {
                     throw new \RuntimeException('No output text from pre-market model.');
                 }
 
