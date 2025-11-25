@@ -34,7 +34,8 @@ class AiTick extends Command
                        ? $model->last_checked_at
                        : Carbon::parse($model->last_checked_at);
                    $interval = $model->check_interval ?? $model->check_interval_min ?? 1; // fallback
-                   $nextCheck = $last->copy()->addMinutes($interval);                   
+                   $nextCheck = $last->copy()->addMinutes($interval);     
+                   //dd($now, $nextCheck);
                    if ($now->lt($nextCheck)) {
                        // Skip this model this minute
                        continue;
@@ -204,6 +205,27 @@ Now, based on the state and instructions, return ONE JSON object with:
 - reasoning
 - orders[]
 TXT;
+              
+              // --- DEBUG: TOKEN APPROXIMATION -------------------------------------
+              $promptRaw  = $systemPrompt . "\n\n" . $userPrompt;
+              $stateRaw   = json_encode($state);
+              $approxPromptTokens = intval(strlen($promptRaw) / 4);
+              $approxStateTokens  = intval(strlen($stateRaw) / 4);
+              $approxTotalTokens  = $approxPromptTokens + $approxStateTokens;
+              ModelLog::create([
+                 'ai_model_id' => $model->id,
+                 'action'      => 'TICK_TOKEN_DEBUG',
+                 'summary'     => "Approx token usage for this tick",
+                 'payload'     => [
+                     'prompt_tokens' => $approxPromptTokens,
+                     'state_tokens'  => $approxStateTokens,
+                     'total_tokens'  => $approxTotalTokens,
+                     'prompt_length_chars' => strlen($promptRaw),
+                     'state_length_chars'  => strlen($stateRaw),
+                 ],
+              ]);
+              // ----------------------------------------------------------------------
+
                // ------------------------------
                // 4) CALL THE OPENAI RESPONSES API
                // ------------------------------
