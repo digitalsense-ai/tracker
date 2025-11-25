@@ -49,7 +49,7 @@ class AiTick extends Command
                    ->get();
                $recentTrades = Trade::where('ai_model_id', $model->id)
                    ->orderByDesc('opened_at')
-                   ->limit(20)
+                   ->limit(10) //20
                    ->get();
                // Compute current exposure (very simple version)
                $equity = (float) ($model->equity ?? 0);
@@ -236,6 +236,7 @@ TXT;
                                ],
                            ],
                        ],
+                       'max_output_tokens' => 512,
                    ]);
                if (!$response->successful()) {
                    throw new \RuntimeException(
