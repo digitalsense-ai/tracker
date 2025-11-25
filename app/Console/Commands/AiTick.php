@@ -34,8 +34,7 @@ class AiTick extends Command
                        ? $model->last_checked_at
                        : Carbon::parse($model->last_checked_at);
                    $interval = $model->check_interval ?? $model->check_interval_min ?? 1; // fallback
-                   $nextCheck = $last->copy()->addMinutes($interval);     
-                   //dd($now, $nextCheck);
+                   $nextCheck = $last->copy()->addMinutes($interval);                   
                    if ($now->lt($nextCheck)) {
                        // Skip this model this minute
                        continue;
@@ -50,7 +49,7 @@ class AiTick extends Command
                    ->get();
                $recentTrades = Trade::where('ai_model_id', $model->id)
                    ->orderByDesc('opened_at')
-                   ->limit(10) //20
+                   ->limit(10)
                    ->get();
                // Compute current exposure (very simple version)
                $equity = (float) ($model->equity ?? 0);
@@ -205,27 +204,27 @@ Now, based on the state and instructions, return ONE JSON object with:
 - reasoning
 - orders[]
 TXT;
-              
-              // --- DEBUG: TOKEN APPROXIMATION -------------------------------------
-              $promptRaw  = $systemPrompt . "\n\n" . $userPrompt;
-              $stateRaw   = json_encode($state);
-              $approxPromptTokens = intval(strlen($promptRaw) / 4);
-              $approxStateTokens  = intval(strlen($stateRaw) / 4);
-              $approxTotalTokens  = $approxPromptTokens + $approxStateTokens;
-              ModelLog::create([
-                 'ai_model_id' => $model->id,
-                 'action'      => 'TICK_TOKEN_DEBUG',
-                 'summary'     => "Approx token usage for this tick",
-                 'payload'     => [
-                     'prompt_tokens' => $approxPromptTokens,
-                     'state_tokens'  => $approxStateTokens,
-                     'total_tokens'  => $approxTotalTokens,
-                     'prompt_length_chars' => strlen($promptRaw),
-                     'state_length_chars'  => strlen($stateRaw),
-                 ],
-              ]);
-              // ----------------------------------------------------------------------
+                // --- DEBUG: approximate token usage for this tick -----------------
+                $promptRaw = $systemPrompt . "\n\n" . $userPrompt;
+                $stateRaw  = $stateJson;
 
+                $approxPromptTokens = (int) (strlen($promptRaw) / 4);
+                $approxStateTokens  = (int) (strlen($stateRaw) / 4);
+                $approxTotalTokens  = $approxPromptTokens + $approxStateTokens;
+
+                ModelLog::create([
+                    'ai_model_id' => $model->id,
+                    'action'      => 'TICK_TOKEN_DEBUG',
+                    'summary'     => 'Approx token usage for this tick',
+                    'payload'     => [
+                        'prompt_tokens'       => $approxPromptTokens,
+                        'state_tokens'        => $approxStateTokens,
+                        'total_tokens'        => $approxTotalTokens,
+                        'prompt_length_chars' => strlen($promptRaw),
+                        'state_length_chars'  => strlen($stateRaw),
+                    ],
+                ]);
+                // -----------------------------------------------------------------
                // ------------------------------
                // 4) CALL THE OPENAI RESPONSES API
                // ------------------------------
@@ -258,7 +257,7 @@ TXT;
                                ],
                            ],
                        ],
-                       'max_output_tokens' => 512,
+                        'max_output_tokens' => 1024,
                    ]);
                if (!$response->successful()) {
                    throw new \RuntimeException(
