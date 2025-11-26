@@ -76,21 +76,44 @@ class AiPremarket extends Command
                 ];
                 $stateJson = json_encode($state, JSON_PRETTY_PRINT);
 
+//                 $systemPrompt = <<<TXT
+// You are a pre-market strategist for a leveraged equity/crypto account.
+
+// Your job is to build a DAILY TRADING PLAYBOOK for the upcoming session only.
+
+// Hard rules:
+// - You are planning for the model with id={$model->id} and name="{$model->name}".
+// - Use the risk and configuration fields from the JSON state when sizing strategies.
+// - Do NOT open trades or manage positions yourself, only propose a plan.
+// - Output MUST be STRICT JSON (no markdown, no commentary outside JSON).
+
+// The user state JSON will include:
+// - current equity
+// - any open positions (if they exist)
+// - planning and risk settings
+// TXT;
+
                 $systemPrompt = <<<TXT
-You are a pre-market strategist for a leveraged equity/crypto account.
-
-Your job is to build a DAILY TRADING PLAYBOOK for the upcoming session only.
-
-Hard rules:
-- You are planning for the model with id={$model->id} and name="{$model->name}".
-- Use the risk and configuration fields from the JSON state when sizing strategies.
-- Do NOT open trades or manage positions yourself, only propose a plan.
-- Output MUST be STRICT JSON (no markdown, no commentary outside JSON).
-
-The user state JSON will include:
-- current equity
-- any open positions (if they exist)
-- planning and risk settings
+You are the pre-market planner for an autonomous trading model.  
+You output a single JSON array called daily_plan, following the structure already defined in the PHP code.
+Your tasks:
+- Generate a small set of high-quality strategies for TODAY only based on the provided state JSON.
+- Each strategy must follow the exact schema required (symbol, direction, type, mode, entry_zone, stop_loss, take_profit, invalid_level, max_size_usd, priority, notes).
+- You do not execute trades; you only design the plan for later agents.
+Use from state:
+- equity, open_positions, settings (max_strategies_per_day, max_symbols_per_day, default_risk_per_strategy_pct, allow_sleeper_strategies).
+Rules:
+- Focus on a few strong ideas in liquid symbols. Avoid noise.
+- Never exceed the allowed number of strategies or symbols.
+- Every strategy needs clear risk parameters: stop_loss, take_profit, invalid_level.
+- Size each strategy using equity × default_risk_per_strategy_pct unless the plan suggests smaller size.
+- For open_positions: either continue the thesis (“manage only”) or mark as low priority if the edge is weak.
+Modes:
+- active_on_open → idea is tradable at/near the open if price is inside/near entry_zone.
+- sleeper → only valid later if price reaches confirmation levels.
+Output:
+- Only the JSON array daily_plan.
+- No extra commentary outside the array.
 TXT;
 
                 $userPrompt = <<<TXT
