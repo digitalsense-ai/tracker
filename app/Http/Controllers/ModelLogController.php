@@ -12,6 +12,7 @@ class ModelLogController extends Controller
         $model = AiModel::where('slug', $slug)->firstOrFail();
 
         $logs = ModelLog::where('ai_model_id', $model->id)
+            ->whereNot('action' ,'TICK_TOKEN_DEBUG')
             ->orderByDesc('id')
             ->paginate(50);
 
