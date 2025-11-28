@@ -86,6 +86,7 @@ class ModelsController extends Controller
         //     'logs' => $logs,
         //     'blocked' => $blocked,
         // ]);
+        $models = AiModel::orderByDesc('return_pct')->get();
 
         $model = AiModel::where('slug',$slug)->firstOrFail();
 
@@ -100,6 +101,7 @@ class ModelsController extends Controller
             ->get();
 
         $logs = ModelLog::where('ai_model_id',$model->id)
+            ->whereNot('action' ,'TICK_TOKEN_DEBUG')
             ->orderBy('id','desc')
             ->limit(20)
             ->get();
@@ -117,6 +119,7 @@ class ModelsController extends Controller
         ];
 
         return view('ai_models.show', [
+            'models'             => $models,
             'm'             => $model,
             'positions'     => $positions,
             'trades'        => $trades,

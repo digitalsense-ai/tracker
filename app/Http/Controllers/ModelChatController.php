@@ -9,9 +9,12 @@ class ModelChatController extends Controller
 {
     public function index(string $slug)
     {
+        $models = AiModel::orderByDesc('return_pct')->get();
+
         $model = AiModel::where('slug', $slug)->firstOrFail();
 
         $logs = ModelLog::where('ai_model_id', $model->id)
+            ->whereNot('action' ,'TICK_TOKEN_DEBUG')
             ->orderByDesc('id')
             ->limit(100)
             ->get();
@@ -48,6 +51,7 @@ class ModelChatController extends Controller
         });
 
         return view('ai_models.chat', [
+            'models'             => $models,
             'm'        => $model,
             'entries'  => $entries,
         ]);

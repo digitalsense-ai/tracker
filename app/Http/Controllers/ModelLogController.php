@@ -9,6 +9,8 @@ class ModelLogController extends Controller
 {
     public function index(string $slug)
     {
+        $models = AiModel::orderByDesc('return_pct')->get();
+        
         $model = AiModel::where('slug', $slug)->firstOrFail();
 
         $logs = ModelLog::where('ai_model_id', $model->id)
@@ -17,6 +19,7 @@ class ModelLogController extends Controller
             ->paginate(50);
 
         return view('ai_models.log', [
+            'models'             => $models,
             'm'    => $model,
             'logs' => $logs,
         ]);

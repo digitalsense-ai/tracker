@@ -7,6 +7,12 @@
 <link rel="stylesheet" href="/css/ai.css">
 
 <div class="nav-tabs">
+  @foreach($models as $model)
+    <a href="{{ route('models.show', $model->slug) }}" class="{{ ($model->slug == $m->slug) ? 'active' : '' }}">{{ $model->name }}</a>    
+  @endforeach
+</div>
+
+<div class="nav-tabs">
   <a href="{{ route('models.show', $m->slug) }}">Overview</a>
   <a href="{{ route('models.chat', $m->slug) }}" class="active">Model Chat</a>
   <a href="{{ route('models.log', $m->slug) }}">Raw Log</a>
