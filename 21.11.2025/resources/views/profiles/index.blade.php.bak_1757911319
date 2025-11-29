@@ -1,6 +1,0 @@
-@extends('layouts.app')
-@section('content')
-<h1>Profiles</h1>
-<p>Entry point for profiles. Link to leaderboard below.</p>
-<p><a class="btn btn-primary" href="/profiles/leaderboard">Open Leaderboard</a></p>
-@endsection
