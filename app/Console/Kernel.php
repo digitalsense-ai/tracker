@@ -6,6 +6,8 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use Storage;
 
+use App\Models\AiModel;
+
 class Kernel extends ConsoleKernel
 {
     protected $commands = [
@@ -51,6 +53,25 @@ class Kernel extends ConsoleKernel
              ->appendOutputTo(storage_path('logs/nyopen.log'));
 
         $schedule->command('ai:tick')->everyMinute();
+
+        // Daily at 9 AM
+        $schedule->call(function () {
+            // Get all models to process
+            //$models = DB::table('models')->where('active', true)->pluck('id'); // replace 'models' with your table
+            $models = AiModel::where('active', true)->pluck('id');
+
+            foreach ($models as $modelId) {
+                // Run the command for each model
+                \Artisan::call('ai:premarket', [
+                    '--model_id' => $modelId,
+                    '--date' => now()->format('Y-m-d'),
+                ]);
+            }
+        })
+        ->name('ai-premarket-daily')   // required for withoutOverlapping
+        ->withoutOverlapping()          // prevents multiple runs at the same time
+        //->runInBackground()             // runs the task in the background
+        ->dailyAt('09:00');                      // schedules it to run daily
     }
 
     /**

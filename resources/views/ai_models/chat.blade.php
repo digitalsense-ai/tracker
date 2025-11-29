@@ -16,6 +16,10 @@
   <a href="{{ route('models.show', $m->slug) }}">Overview</a>
   <a href="{{ route('models.chat', $m->slug) }}" class="active">Model Chat</a>
   <a href="{{ route('models.log', $m->slug) }}">Raw Log</a>
+
+  <a href="{{ route('models.prompt', [$m->slug, 1]) }}">Pre-Market Prompt</a>
+  <a href="{{ route('models.prompt', [$m->slug, 2]) }}">Start Prompt</a>
+  <a href="{{ route('models.prompt', [$m->slug, 3]) }}">Loop / Check Prompt</a>
 </div>
 
 <div class="card">

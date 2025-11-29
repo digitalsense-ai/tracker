@@ -156,8 +156,27 @@ TXT;
                 ])->post('https://api.openai.com/v1/responses', [
                     'model'  => config('services.openai.model', 'gpt-4.1-mini'),
                     'input'  => [
-                        ['role' => 'system', 'content' => $systemPrompt],
-                        ['role' => 'user',   'content' => $userPrompt],
+                        // ['role' => 'system', 'content' => $systemPrompt],
+                        // ['role' => 'user',   'content' => $userPrompt],
+
+                        [
+                           'role'    => 'system',
+                           'content' => [
+                               [
+                                   'type' => 'input_text',
+                                   'text' => $systemPrompt,
+                               ],
+                           ],
+                       ],
+                       [
+                           'role'    => 'user',
+                           'content' => [
+                               [
+                                   'type' => 'input_text',
+                                   'text' => $userPrompt,
+                               ],
+                           ],
+                       ],
                     ],
                     'max_output_tokens' => 2048,
                 ]);
@@ -167,7 +186,16 @@ TXT;
                 }
 
                 $body = $response->json();
-                $outputText = $body['output'][0]['content'][0]['text'] ?? null;
+                //$outputText = $body['output'][0]['content'][0]['text'] ?? null;
+                $outputText = '';
+                if (!empty($body['output'][0]['content'])) {
+                   foreach ($body['output'][0]['content'] as $chunk) {
+                       if (($chunk['type'] ?? null) === 'output_text') {
+                           $outputText .= $chunk['text'] ?? '';
+                       }
+                   }
+                }
+                $outputText = trim($outputText);
                 if (!$outputText) {
                     throw new \RuntimeException('No output text from pre-market model.');
                 }

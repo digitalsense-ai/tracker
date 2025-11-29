@@ -16,6 +16,7 @@ use App\Http\Controllers\LiveController;
 use App\Http\Controllers\ModelsController;
 use App\Http\Controllers\ModelChatController;
 use App\Http\Controllers\ModelLogController;
+use App\Http\Controllers\ModelPromptController;
 
 //use App\Models\AiModel;
 
@@ -56,6 +57,8 @@ Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.sh
 
 Route::get('/models/{slug}/chat', [ModelChatController::class, 'index'])->name('models.chat');
 Route::get('/models/{slug}/log', [ModelLogController::class, 'index'])->name('models.log');
+
+Route::get('/models/{slug}/prompt/{prompt}', [ModelPromptController::class, 'index'])->name('models.prompt');
 
 Route::get('/leaderboard', [\App\Http\Controllers\LeaderboardController::class, 'index'])
    ->name('leaderboard.index');
