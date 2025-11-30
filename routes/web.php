@@ -59,6 +59,7 @@ Route::get('/models/{slug}/chat', [ModelChatController::class, 'index'])->name('
 Route::get('/models/{slug}/log', [ModelLogController::class, 'index'])->name('models.log');
 
 Route::get('/models/{slug}/prompt/{prompt}', [ModelPromptController::class, 'index'])->name('models.prompt');
+Route::post('/toggle-prompt-status/{id}', [ModelsController::class, 'toggle']);
 
 Route::get('/leaderboard', [\App\Http\Controllers\LeaderboardController::class, 'index'])
    ->name('leaderboard.index');

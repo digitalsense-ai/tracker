@@ -6,6 +6,7 @@
   <title>@yield('title','Alpha Arena')</title>
   <link rel="stylesheet" href="{{ asset('assets/style.css') }}">
   <meta name="robots" content="noindex">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
 </head>
 <body>
 <header>
@@ -29,7 +30,8 @@
   @yield('content')
   <div class="footer-note">Deploy-ready · Replace all <b>#</b> with live values.</div>
 </main>
-
+<script src="{{ asset('assets/jquery.min.js') }}"></script>
 <script src="{{ asset('assets/app.js') }}"></script>
+@yield('scripts')
 </body>
 </html>

@@ -191,7 +191,10 @@ OUTPUT FORMAT (MUST FOLLOW EXACTLY):
 - If you decide to CLOSE, orders must only describe closing existing positions in the state.
 TXT;
                // Model-specific instructions from DB (what you put in "loop_prompt")
-               $loopPrompt = $model->loop_prompt ?? 'Decide whether to hold, open, or close positions.';
+              $loopPrompt = 'Decide whether to hold, open, or close positions.';
+              if($model->loop_prompt_status)
+                $loopPrompt = $model->loop_prompt ?? 'Decide whether to hold, open, or close positions.';
+              
                // Final user prompt: give state + model instructions
                $userPrompt = <<<TXT
 Here is your current trading state as JSON:

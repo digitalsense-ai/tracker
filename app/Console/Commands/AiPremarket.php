@@ -116,13 +116,17 @@ Output:
 - No extra commentary outside the array.
 TXT;
 
+            $premarketPrompt = '';
+            if($model->premarket_prompt_status)
+                $premarketPrompt = $model->premarket_prompt ?? '';
+
                 $userPrompt = <<<TXT
 Here is the current planning state as JSON:
 {$stateJson}
 
 Using this information, and the planning instructions below, build a DAILY STRATEGY PLAN for today:
 
-{$model->premarket_prompt}
+{$premarketPrompt}
 
 Your response must be a JSON ARRAY of strategy objects. Each object MUST have at least:
 

@@ -42,7 +42,7 @@ class ModelsController extends Controller
         if (!$model->slug) $data['slug'] = Str::slug($data['name']);
         $model->update($data);
 
-        $model->active = (isset($data->active)) ? 1 : 0;
+        $model->active = (isset($data['active'])) ? 1 : 0;
         $model->save();
         
         return back()->with('ok','Updated');
@@ -154,4 +154,31 @@ class ModelsController extends Controller
             'tags.*'=> 'string|max:30',
         ]);
     }
+
+    public function toggle($id, Request $request)
+    {
+        $model = AiModel::findOrFail($id);
+
+        // Toggle status        
+        if($request->prompt_name == 'Pre-Market Prompt')
+            $model->premarket_prompt_status = $request->status == 1 ? 0 : 1;
+        elseif($request->prompt_name == 'Start Prompt')
+            $model->start_prompt_status = $request->status == 1 ? 0 : 1;
+        elseif($request->prompt_name == 'Loop / Check Prompt')
+            $model->loop_prompt_status = $request->status == 1 ? 0 : 1;
+        $model->save();
+
+        if($request->prompt_name == 'Pre-Market Prompt')
+            $new_status = $model->premarket_prompt_status;
+        elseif($request->prompt_name == 'Start Prompt')
+            $new_status = $model->start_prompt_status;
+        elseif($request->prompt_name == 'Loop / Check Prompt')
+            $new_status = $model->loop_prompt_status;
+
+        return response()->json([
+            'success' => true,
+            'new_status' => isset($new_status) ?? null
+        ]);
+    }
+
 }
