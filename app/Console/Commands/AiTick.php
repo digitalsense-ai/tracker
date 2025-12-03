@@ -108,31 +108,42 @@ class AiTick extends Command
                   }
                 }
 
-                // Load today\'s daily plan if it exists
+                // Load today's daily plan if it exists (and only send approved strategies)
                 $today = now()->toDateString();
                 $dailyPlanModel = AiDailyPlan::where('ai_model_id', $model->id)
-                   ->where('trade_date', $today)
-                   ->first();
-                $dailyPlan = $dailyPlanModel ? $dailyPlanModel->plan_json : null;
-               
-               // Build state object for the AI
-               $state = [
-                   'model' => [
-                       'name'           => $model->name,
-                       'equity'         => $equity,
-                       'start_equity'   => (float) ($model->start_equity ?? $equity),
-                       'goal'           => $model->goal_label ?? null,
-                       'risk_per_trade' => (float) ($model->risk_pct ?? 0),
-                   ],
-                   'time'              => now()->toIso8601String(),
-                   'open_exposure_pct' => $openExposurePct,
-                   //'risk_limits'       => $riskLimits,
-                   'open_positions'    => $openPositionsState,
-                   'recent_trades'     => $recentTradesState,
-                   'prices'           => $prices,
-                   'daily_plan'       => $dailyPlan,
-               ];
+                    ->where('trade_date', $today)
+                    ->first();
 
+                $fullPlan = $dailyPlanModel ? ($dailyPlanModel->plan_json ?? []) : [];
+                $dailyPlan = [];
+
+                if (is_array($fullPlan)) {
+                    foreach ($fullPlan as $s) {
+                        if (is_array($s) && !empty($s['approved'])) {
+                            $dailyPlan[] = $s;
+                        }
+                    }
+                }
+
+                // Build state object for the AI
+                $state = [
+                    'model' => [
+                        'name'           => $model->name,
+                        'equity'         => $equity,
+                        'start_equity'   => (float) ($model->start_equity ?? $equity),
+                        'goal'           => $model->goal_label ?? null,
+                        'risk_per_trade' => (float) ($model->risk_pct ?? 0),
+                    ],
+                    'time'              => now()->toIso8601String(),
+                    'open_exposure_pct' => $openExposurePct,
+                    //'risk_limits'       => $riskLimits,
+                    'open_positions'    => $openPositionsState,
+                    'recent_trades'     => $recentTradesState,
+                    'prices'            => $prices,
+                    'daily_plan'        => $dailyPlan,
+                    'full_plan'         => $fullPlan,
+                ];
+                              
                // // Attach current prices for symbols (if available)
                // $prices = [];
                // $marketData = app(\App\Services\MarketData::class);
