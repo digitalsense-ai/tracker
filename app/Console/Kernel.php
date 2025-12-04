@@ -71,7 +71,7 @@ class Kernel extends ConsoleKernel
         ->name('ai-premarket-daily')   // required for withoutOverlapping
         ->withoutOverlapping()          // prevents multiple runs at the same time
         //->runInBackground()             // runs the task in the background
-        ->dailyAt('09:00');                      // schedules it to run daily
+        ->dailyAt('00:00');                      // schedules it to run daily
     }
 
     /**

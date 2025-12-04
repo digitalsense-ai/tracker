@@ -15,13 +15,19 @@ use App\Services\PaperBroker;
 
 use Carbon\Carbon;
 class AiTick extends Command
-{
-   protected $signature = 'ai:tick';
+{   
+   protected $signature = 'ai:tick {--model_id=}';
    protected $description = 'Runs one tick for all active AI trading models';
    public function handle()
    {
-       $now = Carbon::now();
-       $models = AiModel::where('active', true)->get();
+      $now = Carbon::now();
+      
+      $query = AiModel::where('active', true);
+      if ($this->option('model_id')) {
+        $query->where('id', $this->option('model_id'));
+      }
+      $models = $query->get();
+
        $broker = app(PaperBroker::class);
 
        foreach ($models as $model) {
