@@ -209,22 +209,6 @@ TXT;
                     throw new \RuntimeException('Pre-market model did not return valid JSON array.');
                 }
 
-                // Normalize strategies: ensure each has an id and approved flag
-                $normalizedPlan = [];
-                foreach (array_values($plan) as $idx => $strategy) {
-                    if (!is_array($strategy)) {
-                        continue;
-                    }
-                    if (!isset($strategy['id'])) {
-                        $strategy['id'] = $idx;
-                    }
-                    if (!array_key_exists('approved', $strategy)) {
-                        $strategy['approved'] = false;
-                    }
-                    $normalizedPlan[] = $strategy;
-                }
-                $plan = $normalizedPlan;
-                
                 $dailyPlan = AiDailyPlan::updateOrCreate(
                     [
                         'ai_model_id' => $model->id,
