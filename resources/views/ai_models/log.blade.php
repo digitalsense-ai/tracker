@@ -47,7 +47,7 @@
       @forelse ($logs as $log)
         @php
           $p = $log->payload ?? [];
-          $strategy = data_get($p, 'strategy.name', '—');
+          $strategy = data_get($p, 'strategy.name.name', '—');
           $reason   = data_get($p, 'reasoning', '');
           $short    = Str::limit($reason, 80);
           $guard    = $p['guardrails'] ?? null;

@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\AiModel;
 use App\Models\Position;
 use App\Models\Trade;
+use App\Models\StrategyProfile;
+
 use Carbon\Carbon;
 use App\Services\PriceFeed\PriceFeedInterface;
 
@@ -178,6 +180,13 @@ class PaperBroker
        $trade->qty         = $qty;
        $trade->entry_price = $price;       
        $trade->opened_at   = now();
+
+      // attach a default strategy profile so NOT NULL constraint passes
+      $defaultProfileId = StrategyProfile::query()->orderBy('id')->value('id');
+      if ($defaultProfileId) {
+         $trade->strategy_profile_id = $defaultProfileId;
+      }
+
        $trade->save();
    }
 

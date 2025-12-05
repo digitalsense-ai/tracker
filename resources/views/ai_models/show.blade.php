@@ -112,7 +112,7 @@
         <tr>
           <td class="ts">{{ optional($log->created_at)->toDateTimeString() }}</td>
           <td><span class="badge">{{ strtoupper($log->action ?? 'N/A') }}</span></td>
-          <td>{{ data_get($p, 'strategy.name', '—') }}</td>
+          <td>{{ data_get($p, 'strategy.name.name', '—') }}</td>
           <td class="small">{{ Str::limit(data_get($p, 'reasoning', '—'), 140) }}</td>
         </tr>
       @empty
