@@ -301,6 +301,62 @@ TXT;
                // 5) Parse JSON safely
                // ------------------------------
                $decision = AiDecisionParser::parse($outputText);
+
+              // // ------------------------------
+              // // 5.5) Guardrails + risk sizing (RESTORED FROM OLD TICK)
+              // // ------------------------------
+              // $guards = app(\App\Services\Guards\Guardrails::class);
+              // $risk   = app(\App\Services\RiskManager::class);
+
+              // // Validate required schema fields
+              // $required = ['action','orders','strategy','reasoning'];
+              // $missing  = [];
+              // foreach ($required as $k) {
+              //     if (!array_key_exists($k, $decision)) $missing[] = $k;
+              // }
+
+              // if (!empty($missing)) {
+              //     ModelLog::create([
+              //         'ai_model_id' => $model->id,
+              //         'action'      => 'HOLD',
+              //         'payload'     => [
+              //             'error'   => 'invalid_response',
+              //             'missing' => $missing,
+              //             'raw'     => $decision,
+              //         ],
+              //     ]);
+              //     $model->last_checked_at = now();
+              //     $model->save();
+              //     continue;
+              // }
+
+              // // Apply guardrails
+              // [$ok, $violations, $computed] = $guards->validate($model, $decision);
+
+              // if (!$ok) {
+              //     ModelLog::create([
+              //         'ai_model_id' => $model->id,
+              //         'action'      => 'HOLD',
+              //         'payload'     => [
+              //             'guardrails' => 'blocked',
+              //             'violations' => $violations,
+              //             'computed'   => $computed,
+              //             'decision'   => $decision,
+              //         ],
+              //     ]);
+              //     $model->last_checked_at = now();
+              //     $model->save();
+              //     continue;
+              // }
+
+              // // Risk sizing for orders (RESTORED)
+              // $orders = $decision['orders'] ?? [];
+              // foreach ($orders as &$o) {
+              //     $o = $risk->size($model, $o);
+              // }
+              // unset($o);
+
+
                // ------------------------------
                // 6) Save log (Model Chat uses this)
                // ------------------------------
@@ -342,10 +398,22 @@ TXT;
                //     }
                // }
 
+              // ------------------------------
+              // 7) Broker execution (RESTORED LOGIC + NEW LOGIC)
+              // ------------------------------
+              // if (!empty($orders)) {
+              //     // Maintain compatibility with the new system: processDecision()
+              //     // but pass the sized orders explicitly
+              //     //$broker->execute($model, $orders);
+              //     $decision['orders'] = $orders;
+              // }
+
+              $broker->processDecision($model, $decision);
+
                // ------------------------------
               // 7) Apply orders via PaperBroker (positions + trades + equity)
               // ------------------------------
-              $broker->processDecision($model, $decision);
+              //$broker->processDecision($model, $decision);
               // ------------------------------
               // 8) Snapshot equity AFTER broker updates it
               // ------------------------------

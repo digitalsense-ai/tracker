@@ -17,33 +17,45 @@ class PlanKanbanController extends Controller
     {
         $model = AiModel::where('slug', $slug)->firstOrFail();
 
-        $date = $request->query('date', now()->toDateString());
+        //$date = $request->query('date', now()->toDateString());
+        $date = $request->query('date');
 
-        $plan = AiDailyPlan::where('ai_model_id', $model->id)
-            ->where('trade_date', $date)
-            ->first();
+        $query = AiDailyPlan::where('ai_model_id', $model->id);
+        
+        if($date)
+            $query->where('trade_date', $date);            
 
-        $strategies = $plan ? ($plan->plan_json ?? []) : [];
+        $plans = $query->get(); 
+
+        // $plan = AiDailyPlan::where('ai_model_id', $model->id)
+        //     ->where('trade_date', $date)
+        //     ->first();
+
+        // $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
         $ideaPool = [];
         $approved = [];
 
-        foreach ($strategies as $idx => $s) {
-            if (!is_array($s)) {
-                continue;
-            }
+        foreach ($plans as $key => $plan) {
+            $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
-            // Normalise an id field so we can reference this strategy later.
-            if (!isset($s['id'])) {
-                $s['id'] = $idx;
-            }
+            foreach ($strategies as $idx => $s) {
+                if (!is_array($s)) {
+                    continue;
+                }
 
-            if (!empty($s['approved'])) {
-                $approved[] = $s;
-            } else {
-                $ideaPool[] = $s;
+                // Normalise an id field so we can reference this strategy later.
+                if (!isset($s['id'])) {
+                    $s['id'] = $idx;
+                }
+
+                if (!empty($s['approved'])) {
+                    $approved[] = $s;
+                } else {
+                    $ideaPool[] = $s;
+                }
             }
-        }
+        }//for loop plans
 
         $openPositions = Position::where('ai_model_id', $model->id)
             ->where('status', 'open')
@@ -58,7 +70,7 @@ class PlanKanbanController extends Controller
 
         return view('models.kanban', [
             'model'           => $model,
-            'date'            => $date,
+            'date'            => $date,            
             'plan'            => $plan,
             'ideaPool'        => $ideaPool,
             'approved'        => $approved,

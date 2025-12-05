@@ -19,7 +19,7 @@
       <div>
         <div class="bold">{{ $model->name }}</div>
         <div class="small">Wallet: <span class="mono">{{ $model->wallet ?: '#' }}</span></div>
-        <div class="small">Date: <span class="bold">{{ $date }}</span></div>
+        <div class="small">Date: <span class="bold">{{ ($date) ?? 'All' }}</span></div>
       </div>
       <div>
         <div class="small">Equity</div>
