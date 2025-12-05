@@ -108,16 +108,29 @@ class PaperBroker
     */
    public function processDecision(AiModel $model, array $decision): void
    {
-       $action = $decision['action'] ?? 'HOLD';
+       // Normalise top-level action
+       $action = strtoupper($decision['action'] ?? 'HOLD');
        $orders = $decision['orders'] ?? [];
        if (!in_array($action, ['OPEN', 'CLOSE'])) {
-           // HOLD: no structural changes, just keep equity as is
+           // HOLD (or anything else): no structural changes, just keep equity as is
            $this->recalculateEquity($model);
            return;
        }
        foreach ($orders as $order) {
-           $symbol = $order['symbol'] ?? null;
-           $side   = strtoupper($order['side'] ?? 'BUY');
+           // Support either `symbol` or `ticker` from the AI
+           $symbol = strtoupper($order['symbol'] ?? $order['ticker'] ?? '');
+           // Normalise side into our DB enum: 'long' / 'short'
+           $rawSide = strtolower($order['side'] ?? $order['direction'] ?? 'long');
+           if ($rawSide === 'buy') {
+               $side = 'long';
+           } elseif ($rawSide === 'sell') {
+               $side = 'short';
+           } elseif (in_array($rawSide, ['long','short'], true)) {
+               $side = $rawSide;
+           } else {
+               $side = 'long';
+           }
+
            $qty    = (float) ($order['qty'] ?? 0);
            if (!$symbol || $qty <= 0) {
                continue;
@@ -160,7 +173,7 @@ class PaperBroker
        // log an "open trade" for history
        $trade = new Trade();
        $trade->ai_model_id = $model->id;
-       $trade->symbol      = $symbol;
+       $trade->ticker      = $symbol;
        $trade->side        = $side;
        $trade->qty         = $qty;
        $trade->entry_price = $price;       
@@ -226,7 +239,8 @@ class PaperBroker
            ->get();
        foreach ($openPositions as $p) {
            $price = $this->marketData->getPrice($p->ticker);
-           $direction = strtoupper($p->side) === 'SELL' ? -1 : 1;
+           //$direction = strtoupper($p->side) === 'SELL' ? -1 : 1;
+           $direction = ($p->side === 'short') ? -1 : 1;
            $pnl = ($price - $p->avg_price) * $p->qty * $direction;
            $p->unrealized_pnl = $pnl;
            $p->save();
