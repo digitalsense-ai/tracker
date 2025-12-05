@@ -389,12 +389,20 @@ TXT;
                // ------------------------------
                // 6) Save log (Model Chat uses this)
                // ------------------------------
+              $strategyField = $decision['strategy'] ?? null;
+              if (is_array($strategyField)) {
+                 $strategyName = $strategyField['name'] ?? json_encode($strategyField);
+              } else {
+                 $strategyName = $strategyField;
+              }
+
                $log = new ModelLog();
                $log->ai_model_id = $model->id;
                $log->action      = $decision['action'];
                $log->payload = [
                    'strategy'  => [
-                       'name' => $decision['strategy'],
+                       //'name' => $decision['strategy'],
+                      'name' => $strategyName,
                    ],
                    'reasoning' => $decision['reasoning'],
                    'orders'    => $decision['orders'],
