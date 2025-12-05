@@ -102,22 +102,23 @@ class AiTick extends Command
                    ];
                })->values()->all();
 
-                // Always define prices before state
-                $prices = [];
-                $marketData = app(\App\Services\MarketData::class);
-                foreach ($openPositions as $p) {
-                  $ticker = $p->ticker;
-                  if (!isset($prices[$ticker])) {
-                    $prices[$ticker] = [
-                      'last' => (float) $marketData->getPrice($ticker),
-                    ];
-                  }
-                }
+                // // Always define prices before state
+                // $prices = [];
+                // $marketData = app(\App\Services\MarketData::class);
+                // foreach ($openPositions as $p) {
+                //   $ticker = $p->ticker;
+                //   if (!isset($prices[$ticker])) {
+                //     $prices[$ticker] = [
+                //       'last' => (float) $marketData->getPrice($ticker),
+                //     ];
+                //   }
+                // }
 
                 // Load today\'s daily plan if it exists
-                $today = now()->toDateString();
+                //$today = now()->toDateString();
                 $dailyPlanModel = AiDailyPlan::where('ai_model_id', $model->id)
-                   ->where('trade_date', $today)
+                   //->where('trade_date', $today)
+                    ->orderByDesc('trade_date')
                    ->first();
                 $fullPlan = $dailyPlanModel ? ($dailyPlanModel->plan_json ?? []) : [];
                 $dailyPlan = [];
@@ -126,6 +127,34 @@ class AiTick extends Command
                     foreach ($fullPlan as $s) {
                         if (is_array($s) && !empty($s['approved'])) {
                             $dailyPlan[] = $s;
+                        }
+                    }
+                }
+
+                // Attach current prices for any relevant symbols (open positions + plan)
+                $prices = [];
+                $marketData = app(\App\Services\MarketData::class);
+
+                foreach ($openPositions as $p) {
+                    $ticker = $p->ticker;
+                    if ($ticker && !isset($prices[$ticker])) {
+                        $prices[$ticker] = [
+                            'last' => (float) $marketData->getPrice($ticker),
+                        ];
+                    }
+                }
+
+                foreach ($dailyPlan as $s) {
+                    if (!is_array($s)) {
+                        continue;
+                    }
+                    $ticker = $s['symbol'] ?? null;
+                    if ($ticker) {
+                        $ticker = strtoupper($ticker);
+                        if (!isset($prices[$ticker])) {
+                            $prices[$ticker] = [
+                                'last' => (float) $marketData->getPrice($ticker),
+                            ];
                         }
                     }
                 }
@@ -408,12 +437,12 @@ TXT;
               //     $decision['orders'] = $orders;
               // }
 
-              $broker->processDecision($model, $decision);
+              //$broker->processDecision($model, $decision);
 
                // ------------------------------
               // 7) Apply orders via PaperBroker (positions + trades + equity)
               // ------------------------------
-              //$broker->processDecision($model, $decision);
+              $broker->processDecision($model, $decision);
               // ------------------------------
               // 8) Snapshot equity AFTER broker updates it
               // ------------------------------
