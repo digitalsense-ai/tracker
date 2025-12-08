@@ -65,16 +65,16 @@ class AiTick extends Command
                    $grossExposure += abs($notional);
                }
                $openExposurePct = $equity > 0 ? ($grossExposure / $equity) * 100.0 : 0.0;
-               // // Risk / guardrail fields (adjust names if your columns differ)
-               // $riskLimits = [
-               //     'max_concurrent_positions'   => (int)   ($model->max_concurrent_trades ?? 5),
-               //     'allow_same_symbol_reentry'  => (bool)  ($model->allow_same_symbol_reentry ?? false),
-               //     'cooldown_minutes'           => (int)   ($model->cooldown_minutes ?? 0),
-               //     'per_trade_alloc_pct'        => (float) ($model->per_trade_alloc_pct ?? 20),
-               //     'max_exposure_pct'           => (float) ($model->max_exposure_pct ?? 80),
-               //     'max_leverage'               => (float) ($model->max_leverage ?? 5),
-               //     'max_drawdown_pct'           => (float) ($model->max_drawdown_pct ?? 0),
-               // ];
+               // Risk / guardrail fields (adjust names if your columns differ)
+               $riskLimits = [
+                   'max_concurrent_positions'   => (int)   ($model->max_concurrent_trades ?? 5),
+                   'allow_same_symbol_reentry'  => (bool)  ($model->allow_same_symbol_reentry ?? false),
+                   'cooldown_minutes'           => (int)   ($model->cooldown_minutes ?? 0),
+                   'per_trade_alloc_pct'        => (float) ($model->per_trade_alloc_pct ?? 20),
+                   'max_exposure_pct'           => (float) ($model->max_exposure_pct ?? 80),
+                   'max_leverage'               => (float) ($model->max_leverage ?? 5),
+                   'max_drawdown_pct'           => (float) ($model->max_drawdown_pct ?? 0),
+               ];
                // Normalize open positions for the AI
                $openPositionsState = $openPositions->map(function (Position $p) {
                    return [
@@ -123,13 +123,41 @@ class AiTick extends Command
                 $fullPlan = $dailyPlanModel ? ($dailyPlanModel->plan_json ?? []) : [];
                 $dailyPlan = [];
 
+                // if (is_array($fullPlan)) {
+                //     foreach ($fullPlan as $s) {
+                //         if (is_array($s) && !empty($s['approved'])) {
+                //             $dailyPlan[] = $s;
+                //         }
+                //     }
+                // }
+
                 if (is_array($fullPlan)) {
                     foreach ($fullPlan as $s) {
-                        if (is_array($s) && !empty($s['approved'])) {
+                        if (!is_array($s)) {
+                            continue;
+                        }
+
+                        $approved =
+                            (!empty($s['approved']) && $s['approved']) ||          // old style
+                            (($s['status'] ?? null) === 'approved') ||              // status-based
+                            (!empty($s['keep']));                                  // checkbox-based
+
+                        if ($approved) {
                             $dailyPlan[] = $s;
                         }
                     }
                 }
+
+                \ModelLog::create([
+                    'ai_model_id' => $model->id,
+                    'action'      => 'PLAN_DEBUG',
+                    'payload'     => [
+                        'full_plan_count'  => is_array($fullPlan) ? count($fullPlan) : null,
+                        'daily_plan_count' => count($dailyPlan),
+                        'sample_full_plan' => is_array($fullPlan) ? array_slice($fullPlan, 0, 3) : $fullPlan,
+                        'sample_daily'     => array_slice($dailyPlan, 0, 3),
+                    ],
+                ]);
 
                 // Attach current prices for any relevant symbols (open positions + plan)
                 $prices = [];
@@ -170,7 +198,7 @@ class AiTick extends Command
                    ],
                    'time'              => now()->toIso8601String(),
                    'open_exposure_pct' => $openExposurePct,
-                   //'risk_limits'       => $riskLimits,
+                   'risk_limits'       => $riskLimits,
                    'open_positions'    => $openPositionsState,
                    'recent_trades'     => $recentTradesState,
                    'prices'           => $prices,
@@ -200,58 +228,140 @@ class AiTick extends Command
                // ------------------------------
                // 3) Build system + user prompts
                // ------------------------------
+//                $systemPrompt = <<<TXT
+// You are an autonomous trading agent managing a single account.
+// HARD REQUIREMENTS (DO NOT VIOLATE):
+// You may see a 'prices' map and a 'daily_plan' array in the state:
+// - Use 'prices' to understand current market levels.
+// - Use 'daily_plan' as the playbook: manage and execute those strategies instead of inventing completely new ones.
+// - Only trade symbols given in the state.
+// - Never exceed max_concurrent_positions.
+// - Never exceed max_exposure_pct of account equity.
+// - Do not open a new position in the same symbol if allow_same_symbol_reentry = false and it is already open.
+// - Respect per_trade_alloc_pct as the maximum notional size for a single new position.
+// - Only use these actions: "HOLD", "OPEN", "CLOSE".
+// - When action is "HOLD", orders MUST be an empty array.
+// OUTPUT FORMAT (MUST FOLLOW EXACTLY):
+// - Respond with PURE JSON only, no markdown, no extra commentary.
+// - Shape:
+// {
+//  "action": "HOLD" | "OPEN" | "CLOSE",
+//  "strategy": "short name of current strategy (e.g. 'opening range breakout')",
+//  "reasoning": "1-3 sentences explaining your decision, referencing the state",
+//  "orders": [
+//    {
+//      "symbol": "AAPL",
+//      "side": "BUY" | "SELL",
+//      "qty": 10,
+//      "type": "MARKET",
+//      "stop": 185.0,
+//      "target": 192.0
+//    }
+//  ]
+// }
+// - If you decide not to trade, use:
+// {"action":"HOLD","strategy":"...","reasoning":"...","orders":[]}
+// - If you decide to CLOSE, orders must only describe closing existing positions in the state.
+// TXT;
+
                $systemPrompt = <<<TXT
 You are an autonomous trading agent managing a single account.
-HARD REQUIREMENTS (DO NOT VIOLATE):
-You may see a 'prices' map and a 'daily_plan' array in the state:
-- Use 'prices' to understand current market levels.
-- Use 'daily_plan' as the playbook: manage and execute those strategies instead of inventing completely new ones.
-- Only trade symbols given in the state.
-- Never exceed max_concurrent_positions.
-- Never exceed max_exposure_pct of account equity.
-- Do not open a new position in the same symbol if allow_same_symbol_reentry = false and it is already open.
-- Respect per_trade_alloc_pct as the maximum notional size for a single new position.
-- Only use these actions: "HOLD", "OPEN", "CLOSE".
-- When action is "HOLD", orders MUST be an empty array.
-OUTPUT FORMAT (MUST FOLLOW EXACTLY):
-- Respond with PURE JSON only, no markdown, no extra commentary.
-- Shape:
+
+CORE CONCEPTS IN THE STATE:
+- open_positions: all currently open trades (symbol, side, qty, avg_price, stop_price, target_price, unrealized_pnl, opened_at).
+- daily_plan: the APPROVED trading ideas for today (symbols, direction, entry zone, stop/target/invalidation, notes).
+- prices: current market prices for all relevant symbols.
+- recent_trades: a short history of past trades and PnL.
+
+HIGH-LEVEL TRADING RULES (DO NOT VIOLATE):
+- Only trade symbols that appear in the state (open_positions, daily_plan, or prices).
+- Treat daily_plan as the playbook: you manage and execute those strategies; do not invent new, unrelated trades.
+- Never open a new position in a symbol that is already present in open_positions.
+- Keep total number of open positions small and focused. If there are already several positions open and nothing is clearly better, prefer HOLD over adding more.
+- When you OPEN a position, you MUST propose both a stop and a target for each order, consistent with the plan idea.
+- When you CLOSE a position, it should be because:
+  • price has clearly reached or broken the stop / invalidation / risk level from the plan or the position, OR
+  • price has reached or exceeded the take-profit / target area, OR
+  • the thesis in the daily_plan is clearly invalidated by new price action.
+- Do not churn: if nothing important has changed since the last tick (no key levels hit, no strong new evidence), prefer HOLD.
+
+EXIT & POSITION MANAGEMENT GUIDELINES:
+- Use any stop / target / invalidation levels found in daily_plan or in open_positions as your primary exit rules.
+- If price is close to target and momentum is fading, it is acceptable to CLOSE early or partially; explain this in reasoning.
+- If price is close to stop or invalidation and the idea is not working, CLOSE the position; do not move stops further away.
+- You may mention trailing logic in your reasoning (e.g. "trail stop under higher lows"), but your JSON orders must still use a concrete stop field.
+
+ALLOWED ACTIONS:
+- "HOLD": keep all positions unchanged. When action is "HOLD", orders MUST be an empty array.
+- "OPEN": open one or more new positions according to daily_plan and current prices.
+- "CLOSE": close one or more existing positions in open_positions.
+
+OUTPUT FORMAT (STRICT):
+- Respond with PURE JSON only, no markdown, no prose outside the JSON.
+- Exact shape:
+
 {
- "action": "HOLD" | "OPEN" | "CLOSE",
- "strategy": "short name of current strategy (e.g. 'opening range breakout')",
- "reasoning": "1-3 sentences explaining your decision, referencing the state",
- "orders": [
-   {
-     "symbol": "AAPL",
-     "side": "BUY" | "SELL",
-     "qty": 10,
-     "type": "MARKET",
-     "stop": 185.0,
-     "target": 192.0
-   }
- ]
+  "action": "HOLD" | "OPEN" | "CLOSE",
+  "strategy": "short name of current strategy (e.g. 'AAPL opening range long')",
+  "reasoning": "1–3 sentences explaining the decision, including the exit plan if opening or the trigger if closing.",
+  "orders": [
+    {
+      "symbol": "AAPL",
+      "side": "BUY" | "SELL",
+      "qty": 10,
+      "type": "MARKET",
+      "stop": 185.0,
+      "target": 192.0
+    }
+  ]
 }
-- If you decide not to trade, use:
-{"action":"HOLD","strategy":"...","reasoning":"...","orders":[]}
-- If you decide to CLOSE, orders must only describe closing existing positions in the state.
+
+- If you decide not to trade, use exactly:
+{"action":"HOLD","strategy":"hold_existing","reasoning":"...","orders":[]}
+
+- If action is "OPEN", orders must describe only NEW positions.
+- If action is "CLOSE", orders must only describe closing or reducing existing positions from open_positions.
 TXT;
+
                // Model-specific instructions from DB (what you put in "loop_prompt")
-              $loopPrompt = 'Decide whether to hold, open, or close positions.';
-              if($model->loop_prompt_status)
-                $loopPrompt = $model->loop_prompt ?? 'Decide whether to hold, open, or close positions.';
+//               $loopPrompt = 'Decide whether to hold, open, or close positions.';
+//               if($model->loop_prompt_status)
+//                 $loopPrompt = $model->loop_prompt ?? 'Decide whether to hold, open, or close positions.';
               
-               // Final user prompt: give state + model instructions
-               $userPrompt = <<<TXT
-Here is your current trading state as JSON:
-$stateJson
-Instructions for this model:
-$loopPrompt
-Now, based on the state and instructions, return ONE JSON object with:
-- action ("HOLD", "OPEN", or "CLOSE")
-- strategy
-- reasoning
-- orders[]
+//                // Final user prompt: give state + model instructions
+//                $userPrompt = <<<TXT
+// Here is your current trading state as JSON:
+// $stateJson
+// Instructions for this model:
+// $loopPrompt
+// Now, based on the state and instructions, return ONE JSON object with:
+// - action ("HOLD", "OPEN", or "CLOSE")
+// - strategy
+// - reasoning
+// - orders[]
+// TXT;
+
+              $defaultLoopPrompt = <<<TXT
+On each tick, manage the account using the current state:
+
+1) First look at open_positions and prices:
+   - If any position has clearly hit its stop / invalidation level or has moved well beyond its intended target from daily_plan, you should CLOSE that position.
+   - If positions are behaving normally and no exit rules are triggered, you will usually choose HOLD.
+
+2) Then look at daily_plan:
+   - If there are approved ideas whose entry conditions are now met at current prices, and you are not already in that symbol, consider OPEN for the best one or few opportunities.
+   - Do NOT open more positions than is reasonable at once; prioritise the highest quality ideas.
+
+3) If nothing obvious needs to be opened or closed, choose HOLD.
+
+Be concise, disciplined, and always reference the plan and the exit rules in your reasoning.
 TXT;
+
+$loopPrompt = $defaultLoopPrompt;
+if ($model->loop_prompt_status) {
+    $loopPrompt = $model->loop_prompt ?? $defaultLoopPrompt;
+}
+
                 // --- DEBUG: approximate token usage for this tick -----------------
                 $promptRaw = $systemPrompt . "\n\n" . $userPrompt;
                 $stateRaw  = $stateJson;
@@ -462,17 +572,17 @@ TXT;
               $model->last_checked_at = now();
               $model->save();
 
-               // ------------------------------
-               // 8) Update equity + snapshot
-               // ------------------------------
-               // TODO: update $model->equity based on trades / PnL logic
-               EquitySnapshot::create([
-                   'ai_model_id' => $model->id,
-                   'equity'      => $model->equity,
-                   'taken_at'    => now(),
-               ]);
-               $model->last_checked_at = now();
-               $model->save();
+               // // ------------------------------
+               // // 8) Update equity + snapshot
+               // // ------------------------------
+               // // TODO: update $model->equity based on trades / PnL logic
+               // EquitySnapshot::create([
+               //     'ai_model_id' => $model->id,
+               //     'equity'      => $model->equity,
+               //     'taken_at'    => now(),
+               // ]);
+               // $model->last_checked_at = now();
+               // $model->save();
            } catch (\Throwable $e) {
                $this->error("Error in model {$model->name}: " . $e->getMessage());
 
