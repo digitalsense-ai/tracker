@@ -202,7 +202,8 @@ class PaperBroker
        $exitPrice = $this->marketData->getPrice($symbol);
        // Close any open trades for that symbol as well
        $openTrades = Trade::where('ai_model_id', $model->id)
-                       ->where('symbol', $symbol)
+                       //->where('symbol', $symbol)
+                        ->where('ticker', $symbol)   // ✅ use ticker, not symbol
                        ->whereNull('closed_at')
                        ->get();
        foreach ($openTrades as $trade) {
