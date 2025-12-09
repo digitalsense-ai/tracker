@@ -148,7 +148,7 @@ class AiTick extends Command
                     }
                 }
 
-                \ModelLog::create([
+                ModelLog::create([
                     'ai_model_id' => $model->id,
                     'action'      => 'PLAN_DEBUG',
                     'payload'     => [
@@ -341,7 +341,7 @@ TXT;
 // - orders[]
 // TXT;
 
-              $defaultLoopPrompt = <<<TXT
+              $userPrompt = <<<TXT
 On each tick, manage the account using the current state:
 
 1) First look at open_positions and prices:
@@ -357,9 +357,9 @@ On each tick, manage the account using the current state:
 Be concise, disciplined, and always reference the plan and the exit rules in your reasoning.
 TXT;
 
-$loopPrompt = $defaultLoopPrompt;
+$loopPrompt = $userPrompt;
 if ($model->loop_prompt_status) {
-    $loopPrompt = $model->loop_prompt ?? $defaultLoopPrompt;
+    $loopPrompt = $model->loop_prompt ?? $userPrompt;
 }
 
                 // --- DEBUG: approximate token usage for this tick -----------------

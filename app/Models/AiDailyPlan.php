@@ -14,8 +14,8 @@ class AiDailyPlan extends Model
     ];
 
     protected $casts = [
-        'trade_date' => 'date',
         'plan_json'  => 'array',
+        'trade_date' => 'date',
     ];
 
     public function model(): BelongsTo
