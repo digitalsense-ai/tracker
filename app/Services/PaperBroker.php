@@ -252,12 +252,20 @@ class PaperBroker
        $trade->notional_entry = $price * $qty;
        $trade->fees           = 0;
        $trade->net_pnl        = 0;
+       $trade->closed_at      = Carbon::now();
+
+       $trade->date = Carbon::now()->toDateString(); // e.g. "2025-12-09"
 
       // attach a default strategy profile so NOT NULL constraint passes
       $defaultProfileId = StrategyProfile::query()->orderBy('id')->value('id');
       if ($defaultProfileId) {
         $trade->strategy_profile_id = $defaultProfileId;
       }
+
+      // ✅ NEW: required by DB: exit_price (and likely companions)
+      $trade->exit_price     = 0;          // placeholder for open trades
+      $trade->notional_exit  = 0;          // no exit yet      
+      $trade->stop_loss     = 0;
 
        $trade->save();
     }
