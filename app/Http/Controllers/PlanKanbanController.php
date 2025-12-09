@@ -68,6 +68,27 @@ class PlanKanbanController extends Controller
             ->limit(25)
             ->get();
 
+        // Build a set of symbols that are currently live (open positions)
+        $liveSymbols = $openPositions
+           ->pluck('ticker')
+           ->filter()
+           ->map(fn($s) => strtoupper($s))
+           ->unique()
+           ->all();
+        // Filter approved strategies so any strategy whose symbol is already live
+        // does NOT stay in the "Approved for Today" lane.
+        $approvedFiltered = [];
+        foreach ($approved as $s) {
+           $sym = strtoupper($s['symbol'] ?? '');
+           if ($sym && in_array($sym, $liveSymbols, true)) {
+               // This strategy is already live via an open position -> skip from lane 2
+               continue;
+           }
+           $approvedFiltered[] = $s;
+        }
+        // Replace the original approved list
+        $approved = $approvedFiltered;
+
         return view('models.kanban', [
             'model'           => $model,
             'date'            => $date,            
