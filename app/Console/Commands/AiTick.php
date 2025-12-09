@@ -122,42 +122,24 @@ class AiTick extends Command
                    ->first();
                 $fullPlan = $dailyPlanModel ? ($dailyPlanModel->plan_json ?? []) : [];
                 $dailyPlan = [];
-
-                // if (is_array($fullPlan)) {
-                //     foreach ($fullPlan as $s) {
-                //         if (is_array($s) && !empty($s['approved'])) {
-                //             $dailyPlan[] = $s;
-                //         }
-                //     }
-                // }
-
                 if (is_array($fullPlan)) {
-                    foreach ($fullPlan as $s) {
-                        if (!is_array($s)) {
-                            continue;
-                        }
-
-                        $approved =
-                            (!empty($s['approved']) && $s['approved']) ||          // old style
-                            (($s['status'] ?? null) === 'approved') ||              // status-based
-                            (!empty($s['keep']));                                  // checkbox-based
-
-                        if ($approved) {
-                            $dailyPlan[] = $s;
-                        }
-                    }
-                }
-
-                ModelLog::create([
-                    'ai_model_id' => $model->id,
-                    'action'      => 'PLAN_DEBUG',
-                    'payload'     => [
-                        'full_plan_count'  => is_array($fullPlan) ? count($fullPlan) : null,
-                        'daily_plan_count' => count($dailyPlan),
-                        'sample_full_plan' => is_array($fullPlan) ? array_slice($fullPlan, 0, 3) : $fullPlan,
-                        'sample_daily'     => array_slice($dailyPlan, 0, 3),
-                    ],
-                ]);
+                   foreach ($fullPlan as $s) {
+                       if (!is_array($s)) {
+                           continue;
+                       }
+                       // Treat these as approved:
+                       // - explicit approved = true
+                       // - status === 'approved'
+                       // - keep = true (checkbox semantics)
+                       $approved =
+                           (!empty($s['approved']) && $s['approved']) ||
+                           (($s['status'] ?? null) === 'approved') ||
+                           (!empty($s['keep']));
+                       if ($approved) {
+                           $dailyPlan[] = $s;
+                       }
+                   }
+                }               
 
                 // Attach current prices for any relevant symbols (open positions + plan)
                 $prices = [];
@@ -187,6 +169,19 @@ class AiTick extends Command
                     }
                 }
 
+                ModelLog::create([
+                    'ai_model_id' => $model->id,
+                    'action'      => 'PLAN_DEBUG',
+                    'payload'     => [
+                        'full_plan_count'  => is_array($fullPlan) ? count($fullPlan) : null,
+                        'daily_plan_count' => count($dailyPlan),
+                        'sample_full_plan' => is_array($fullPlan) ? array_slice($fullPlan, 0, 3) : $fullPlan,
+                        'sample_daily'     => array_slice($dailyPlan, 0, 3),
+                        'open_positions_count' => count($openPositionsState),
+                        'prices_keys' => array_keys($prices),
+                    ],
+                ]);
+                
                // Build state object for the AI
                $state = [
                    'model' => [
@@ -266,59 +261,68 @@ class AiTick extends Command
 
                $systemPrompt = <<<TXT
 You are an autonomous trading agent managing a single account.
-
 CORE CONCEPTS IN THE STATE:
 - open_positions: all currently open trades (symbol, side, qty, avg_price, stop_price, target_price, unrealized_pnl, opened_at).
-- daily_plan: the APPROVED trading ideas for today (symbols, direction, entry zone, stop/target/invalidation, notes).
-- prices: current market prices for all relevant symbols.
-- recent_trades: a short history of past trades and PnL.
-
-HIGH-LEVEL TRADING RULES (DO NOT VIOLATE):
-- Only trade symbols that appear in the state (open_positions, daily_plan, or prices).
-- Treat daily_plan as the playbook: you manage and execute those strategies; do not invent new, unrelated trades.
-- Never open a new position in a symbol that is already present in open_positions.
-- Keep total number of open positions small and focused. If there are already several positions open and nothing is clearly better, prefer HOLD over adding more.
-- When you OPEN a position, you MUST propose both a stop and a target for each order, consistent with the plan idea.
-- When you CLOSE a position, it should be because:
-  • price has clearly reached or broken the stop / invalidation / risk level from the plan or the position, OR
-  • price has reached or exceeded the take-profit / target area, OR
-  • the thesis in the daily_plan is clearly invalidated by new price action.
-- Do not churn: if nothing important has changed since the last tick (no key levels hit, no strong new evidence), prefer HOLD.
-
+- daily_plan: the APPROVED trading ideas for today. Each idea typically has:
+ - symbol: e.g. "AAPL"
+ - direction: "long" or "short"
+ - mode: usually "active_on_open" when the idea should be tradable now
+ - stop_loss: numeric level for the protective stop
+ - take_profit: numeric level for the main target
+ - invalid_level: level where the thesis is considered broken
+ - entry_zone: text like "near 100" describing the intended entry area
+ - max_size_usd: maximum notional size for this idea
+ - notes: human explanation of the thesis
+INTERPRETING daily_plan (MANDATORY):
+- For direction = "long":
+ - The idea is to buy the symbol.
+ - Use stop_loss as the protective stop level.
+ - Use take_profit as the main exit target.
+ - Respect invalid_level as the line where the thesis is broken.
+- For direction = "short":
+ - The idea is to sell/short the symbol, applying the same stop/target/invalid logic.
+- For mode = "active_on_open":
+ - Treat the idea as immediately tradable during this session.
+APPROXIMATING entry_zone:
+- When entry_zone is a phrase like "near 100", interpret the number (100) as the intended anchor level.
+- Consider price "near 100" if the current price is within roughly 2–3% of that number (for example 97–103).
+- If current price is in this zone, the idea is approved, and you do not already hold that symbol, you should usually OPEN a position following the plan (stop at stop_loss, target at take_profit) instead of waiting forever.
 EXIT & POSITION MANAGEMENT GUIDELINES:
-- Use any stop / target / invalidation levels found in daily_plan or in open_positions as your primary exit rules.
-- If price is close to target and momentum is fading, it is acceptable to CLOSE early or partially; explain this in reasoning.
-- If price is close to stop or invalidation and the idea is not working, CLOSE the position; do not move stops further away.
-- You may mention trailing logic in your reasoning (e.g. "trail stop under higher lows"), but your JSON orders must still use a concrete stop field.
-
+- For any open position:
+ - If price has clearly reached or broken stop_loss or invalid_level, you should CLOSE the position.
+ - If price has reached or exceeded take_profit, it is usually correct to CLOSE and realise profit.
+- Do not widen stops. If a stop or invalid_level is threatened, exit instead of moving it further away.
+- You may mention trailing logic in reasoning, but in JSON you must still provide a concrete stop and target.
+POSITION DISCIPLINE:
+- Only trade symbols that appear in the state (open_positions, daily_plan, or prices).
+- Treat daily_plan as the playbook: manage and execute those strategies; do not invent unrelated trades.
+- Never open a new position in a symbol that is already present in open_positions.
+- Keep the number of open positions small and focused. If nothing is clearly attractive, prefer HOLD.
+- When you OPEN a position, you MUST provide a stop and a target for each order, consistent with the idea in daily_plan.
 ALLOWED ACTIONS:
-- "HOLD": keep all positions unchanged. When action is "HOLD", orders MUST be an empty array.
-- "OPEN": open one or more new positions according to daily_plan and current prices.
-- "CLOSE": close one or more existing positions in open_positions.
-
+- "HOLD": keep all positions unchanged. When action is "HOLD", orders MUST be [].
+- "OPEN": open new positions according to daily_plan and current prices.
+- "CLOSE": close existing positions from open_positions.
 OUTPUT FORMAT (STRICT):
-- Respond with PURE JSON only, no markdown, no prose outside the JSON.
+- Respond with PURE JSON only, no markdown, no commentary outside JSON.
 - Exact shape:
-
 {
-  "action": "HOLD" | "OPEN" | "CLOSE",
-  "strategy": "short name of current strategy (e.g. 'AAPL opening range long')",
-  "reasoning": "1–3 sentences explaining the decision, including the exit plan if opening or the trigger if closing.",
-  "orders": [
-    {
-      "symbol": "AAPL",
-      "side": "BUY" | "SELL",
-      "qty": 10,
-      "type": "MARKET",
-      "stop": 185.0,
-      "target": 192.0
-    }
-  ]
+ "action": "HOLD" | "OPEN" | "CLOSE",
+ "strategy": "short name of current strategy (e.g. 'AAPL trend follow long')",
+ "reasoning": "1–3 sentences explaining the decision, including the exit plan if opening or the trigger if closing.",
+ "orders": [
+   {
+     "symbol": "AAPL",
+     "side": "BUY" | "SELL",
+     "qty": 10,
+     "type": "MARKET",
+     "stop": 97.0,
+     "target": 110.0
+   }
+ ]
 }
-
 - If you decide not to trade, use exactly:
 {"action":"HOLD","strategy":"hold_existing","reasoning":"...","orders":[]}
-
 - If action is "OPEN", orders must describe only NEW positions.
 - If action is "CLOSE", orders must only describe closing or reducing existing positions from open_positions.
 TXT;
@@ -328,39 +332,45 @@ TXT;
 //               if($model->loop_prompt_status)
 //                 $loopPrompt = $model->loop_prompt ?? 'Decide whether to hold, open, or close positions.';
               
-//                // Final user prompt: give state + model instructions
-//                $userPrompt = <<<TXT
-// Here is your current trading state as JSON:
-// $stateJson
-// Instructions for this model:
-// $loopPrompt
-// Now, based on the state and instructions, return ONE JSON object with:
-// - action ("HOLD", "OPEN", or "CLOSE")
-// - strategy
-// - reasoning
-// - orders[]
-// TXT;
 
-              $userPrompt = <<<TXT
+              $defaultLoopPrompt = <<<TXT
 On each tick, manage the account using the current state:
-
-1) First look at open_positions and prices:
-   - If any position has clearly hit its stop / invalidation level or has moved well beyond its intended target from daily_plan, you should CLOSE that position.
-   - If positions are behaving normally and no exit rules are triggered, you will usually choose HOLD.
-
-2) Then look at daily_plan:
-   - If there are approved ideas whose entry conditions are now met at current prices, and you are not already in that symbol, consider OPEN for the best one or few opportunities.
-   - Do NOT open more positions than is reasonable at once; prioritise the highest quality ideas.
-
+1) Check open_positions and prices:
+  - If any open position has clearly hit or gone through its stop_loss or invalid_level from the plan or its own stop_price, you should CLOSE that position.
+  - If price has reached or exceeded take_profit for an open position, it is usually correct to CLOSE and realise profit.
+2) Then check daily_plan:
+  - Focus only on ideas where approved = true and mode = "active_on_open".
+  - For each such idea:
+    • If direction = "long" and there is NO open long position in that symbol:
+      - If the current price is reasonably "near" the intended entry level (for example within a few percent of the level implied by entry_zone like "near 100"),
+        you should OPEN a position using stop_loss as the stop and take_profit as the target.
+    • If direction = "short" and there is NO open short position in that symbol:
+      - Apply the same logic in the short direction.
+  - Do NOT open more than one new position in the same symbol at once, and avoid reopening a symbol immediately after closing it unless the plan clearly supports re-entry.
 3) If nothing obvious needs to be opened or closed, choose HOLD.
-
-Be concise, disciplined, and always reference the plan and the exit rules in your reasoning.
+Your reasoning must always:
+- Refer to the specific symbol(s) you are acting on.
+- Mention stop_loss and take_profit from the plan when you OPEN.
+- Mention whether you are closing because of stop_loss, invalid_level, or take_profit when you CLOSE.
 TXT;
-
-$loopPrompt = $userPrompt;
+$loopPrompt = $defaultLoopPrompt;
 if ($model->loop_prompt_status) {
-    $loopPrompt = $model->loop_prompt ?? $userPrompt;
+   $loopPrompt = $model->loop_prompt ?? $defaultLoopPrompt;
 }
+
+               // Final user prompt: give state + model instructions
+               $userPrompt = <<<TXT
+Here is your current trading state as JSON:
+$stateJson
+Instructions for this model:
+$loopPrompt
+Now, based on the state and instructions, return ONE JSON object with:
+- action ("HOLD", "OPEN", or "CLOSE")
+- strategy
+- reasoning
+- orders[]
+TXT;
+              
 
                 // --- DEBUG: approximate token usage for this tick -----------------
                 $promptRaw = $systemPrompt . "\n\n" . $userPrompt;

@@ -146,49 +146,121 @@ class PaperBroker
        $this->recalculateEquity($model);
    }
 
-   protected function openPosition(AiModel $model, string $symbol, string $side, float $qty): void
-   {
-       $price = $this->marketData->getPrice($symbol);
-       // Either create a new position or add to existing one
+   // protected function openPosition(AiModel $model, string $symbol, string $side, float $qty): void
+   // {
+   //     $price = $this->marketData->getPrice($symbol);
+   //     // Either create a new position or add to existing one
+   //     $position = Position::where('ai_model_id', $model->id)
+   //         ->where('ticker', $symbol)
+   //         ->where('status', 'open')
+   //         ->first();
+   //     if ($position) {
+   //         // increase position (simple average price)
+   //         $totalQty   = $position->qty + $qty;
+   //         $newAvg     = ($position->avg_price * $position->qty + $price * $qty) / $totalQty;
+   //         $position->qty       = $totalQty;
+   //         $position->avg_price = $newAvg;
+   //         $position->save();
+   //     } else {
+   //         $position = new Position();
+   //         $position->ai_model_id = $model->id;
+   //         $position->ticker      = $symbol;
+   //         $position->side        = $side;
+   //         $position->qty         = $qty;
+   //         $position->avg_price   = $price;
+   //         $position->status      = 'open';
+   //         $position->opened_at   = now();
+   //         $position->save();
+   //     }
+   //     // log an "open trade" for history
+   //     $trade = new Trade();
+   //     $trade->ai_model_id = $model->id;
+   //     $trade->ticker      = $symbol;
+   //     $trade->side        = $side;
+   //     $trade->qty         = $qty;
+   //     $trade->entry_price = $price;       
+   //     $trade->opened_at   = now();
+
+   //    // attach a default strategy profile so NOT NULL constraint passes
+   //    $defaultProfileId = StrategyProfile::query()->orderBy('id')->value('id');
+   //    if ($defaultProfileId) {
+   //       $trade->strategy_profile_id = $defaultProfileId;
+   //    }
+
+   //     $trade->save();
+   // }
+
+   protected function openPosition(
+       AiModel $model,
+       string $symbol,
+       string $side,
+       float $qty,
+       ?float $stopPrice = null,
+       ?float $targetPrice = null
+    ): void {
+       $marketData = app(\App\Services\MarketData::class);
+       $price      = (float) $marketData->getPrice($symbol);
+       if ($price <= 0) {
+           return;
+       }
+       // Try to find existing open position first
        $position = Position::where('ai_model_id', $model->id)
            ->where('ticker', $symbol)
            ->where('status', 'open')
            ->first();
        if ($position) {
-           // increase position (simple average price)
-           $totalQty   = $position->qty + $qty;
-           $newAvg     = ($position->avg_price * $position->qty + $price * $qty) / $totalQty;
-           $position->qty       = $totalQty;
-           $position->avg_price = $newAvg;
+           // ADD to existing position
+           $oldQty   = (float)$position->qty;
+           $newQty   = $oldQty + $qty;
+           if ($newQty <= 0) {
+               return;
+           }
+           $oldNotional = $oldQty * (float)$position->avg_price;
+           $addNotional = $qty * $price;
+           $avgPrice    = ($oldNotional + $addNotional) / $newQty;
+           $position->qty        = $newQty;
+           $position->avg_price  = $avgPrice;
+           if ($stopPrice !== null) {
+               $position->stop_price = $stopPrice;
+           }
+           if ($targetPrice !== null) {
+               $position->target_price = $targetPrice;
+           }
            $position->save();
        } else {
-           $position = new Position();
-           $position->ai_model_id = $model->id;
-           $position->ticker      = $symbol;
-           $position->side        = $side;
-           $position->qty         = $qty;
-           $position->avg_price   = $price;
-           $position->status      = 'open';
-           $position->opened_at   = now();
+           // Create brand new position
+           $position               = new Position();
+           $position->ai_model_id  = $model->id;
+           $position->ticker       = $symbol;
+           $position->side         = $side;
+           $position->qty          = $qty;
+           $position->avg_price    = $price;
+           $position->stop_price   = $stopPrice;
+           $position->target_price = $targetPrice;
+           $position->status       = 'open';
+           $position->opened_at    = now();
            $position->save();
        }
-       // log an "open trade" for history
-       $trade = new Trade();
-       $trade->ai_model_id = $model->id;
-       $trade->ticker      = $symbol;
-       $trade->side        = $side;
-       $trade->qty         = $qty;
-       $trade->entry_price = $price;       
-       $trade->opened_at   = now();
+       // ALWAYS create a trade row for every OPEN/ADD
+       $trade                 = new Trade();
+       $trade->ai_model_id    = $model->id;
+       $trade->ticker         = $symbol;
+       $trade->side           = $side;
+       $trade->qty            = $qty;
+       $trade->entry_price    = $price;
+       $trade->opened_at      = now();
+       $trade->notional_entry = $price * $qty;
+       $trade->fees           = 0;
+       $trade->net_pnl        = 0;
 
       // attach a default strategy profile so NOT NULL constraint passes
       $defaultProfileId = StrategyProfile::query()->orderBy('id')->value('id');
       if ($defaultProfileId) {
-         $trade->strategy_profile_id = $defaultProfileId;
+        $trade->strategy_profile_id = $defaultProfileId;
       }
 
        $trade->save();
-   }
+    }
 
    protected function closePositionBySymbol(AiModel $model, string $symbol): void
    {
@@ -259,4 +331,18 @@ class PaperBroker
        $model->equity = $start + $realized + $unrealized;
        $model->save();
    }
+
+  protected function handleOpenOrder(AiModel $model, array $order): void
+  {
+    $symbol = $order['symbol'] ?? null;
+    $side   = strtoupper($order['side'] ?? 'BUY');
+    $qty    = (float) ($order['qty'] ?? 0);
+    $stop   = isset($order['stop'])   ? (float)$order['stop']   : null;
+    $target = isset($order['target']) ? (float)$order['target'] : null;
+    if (!$symbol || $qty <= 0) {
+      return;
+    }
+    // DO NOT block on existing position anymore – we allow adds now.
+    $this->openPosition($model, $symbol, $side, $qty, $stop, $target);
+  }
 }
