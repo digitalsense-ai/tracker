@@ -92,7 +92,7 @@ class PlanKanbanController extends Controller
         return view('models.kanban', [
             'model'           => $model,
             'date'            => $date,            
-            'plan'            => $plan,
+            'plan'            => ($date) ? $plans->first() : $plan,
             'ideaPool'        => $ideaPool,
             'approved'        => $approved,
             'openPositions'   => $openPositions,

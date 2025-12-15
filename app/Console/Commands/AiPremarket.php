@@ -42,6 +42,14 @@ class AiPremarket extends Command
             try {
                 $this->info("Running pre-market plan for model {$model->id} ({$model->name}) on {$tradeDate}...");
 
+                $marketData = app(\App\Services\MarketData::class);
+                $universe = ['AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ']; // pick yours
+
+                $prices = [];
+                foreach ($universe as $sym) {
+                   $prices[$sym] = ['last' => (float) $marketData->getPrice($sym)];
+                }
+
                 // Build a lightweight state snapshot for planning
                 $openPositions = Position::where('ai_model_id', $model->id)
                     ->where('status', 'open')
@@ -67,6 +75,7 @@ class AiPremarket extends Command
                     'time'    => Carbon::now()->toIso8601String(),
                     'equity'  => (float) ($model->equity ?? 0),
                     'open_positions' => $openPositions,
+                    'prices' => $prices, // ✅ ADD THIS
                     'settings' => [
                         'max_strategies_per_day'        => $model->max_strategies_per_day,
                         'max_symbols_per_day'           => $model->max_symbols_per_day,
@@ -111,6 +120,16 @@ Rules:
 Modes:
 - active_on_open → idea is tradable at/near the open if price is inside/near entry_zone.
 - sleeper → only valid later if price reaches confirmation levels.
+IMPORTANT:
+- The state includes a "prices" map of current market prices.
+- For each strategy you propose, you MUST anchor entry_zone, stop_loss, take_profit, invalid_level around the current price of that symbol.
+- If you do not have a price for a symbol, do NOT include that symbol in the plan.
+- active_on_open strategies must have entry_zone within ~0–3% of the current price (so they are realistically tradable today).
+- sleeper strategies may be further away, but must explain the trigger condition in entry_zone.
+Each strategy MUST include:
+- entry_zone_low: number
+- entry_zone_high: number
+And entry_zone should be a readable string like "185-188".
 Output:
 - Only the JSON array daily_plan.
 - No extra commentary outside the array.
@@ -135,6 +154,8 @@ Your response must be a JSON ARRAY of strategy objects. Each object MUST have at
 - "type": string description (e.g. "trend_follow", "mean_reversion", "distribution_short", "carry_trade")
 - "mode": "active_on_open" | "sleeper"
 - "entry_zone": string describing price range or condition (e.g. "400-405" or "above 415 on strong momentum")
+- "entry_zone_low": number
+- "entry_zone_high": number
 - "stop_loss": number (approx stop level)
 - "take_profit": number (approx target level)
 - "invalid_level": number (where the thesis is clearly wrong)
