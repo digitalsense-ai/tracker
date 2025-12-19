@@ -7,6 +7,7 @@ use App\Models\AiDailyPlan;
 use App\Models\Position;
 use App\Models\Trade;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class PlanKanbanController extends Controller
 {
@@ -37,6 +38,9 @@ class PlanKanbanController extends Controller
         $approved = [];
 
         foreach ($plans as $key => $plan) {
+            if(Carbon::parse($plan->trade_date)->lt(Carbon::now('Europe/Copenhagen')->subHours(24)))
+                continue; 
+
             $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
             foreach ($strategies as $idx => $s) {

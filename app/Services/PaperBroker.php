@@ -252,7 +252,7 @@ class PaperBroker
        $trade->notional_entry = $price * $qty;
        $trade->fees           = 0;
        $trade->net_pnl        = 0;
-       $trade->closed_at      = Carbon::now();
+       //$trade->closed_at      = Carbon::now();
 
        $trade->date = Carbon::now()->toDateString(); // e.g. "2025-12-09"
 
