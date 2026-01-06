@@ -15,6 +15,7 @@ use App\Http\Controllers\Profiles\LeaderboardController;
 use App\Http\Controllers\LiveController;
 use App\Http\Controllers\ModelsController;
 use App\Http\Controllers\PlanKanbanController;
+use App\Http\Controllers\PlanKanbanControllerV2;
 use App\Http\Controllers\ModelChatController;
 use App\Http\Controllers\ModelLogController;
 use App\Http\Controllers\ModelPromptController;
@@ -57,6 +58,7 @@ Route::put('/models/{model}', [ModelsController::class, 'update'])->name('models
 Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.show');
 
 Route::get('/models/{slug}/kanban', [PlanKanbanController::class, 'index'])->name('models.kanban');
+Route::get('/models/{slug}/kanban-v2', [PlanKanbanControllerV2::class, 'index'])->name('models.kanban.v2');
 Route::post('/models/{slug}/kanban', [PlanKanbanController::class, 'update'])->name('models.kanban.update');
 
 
