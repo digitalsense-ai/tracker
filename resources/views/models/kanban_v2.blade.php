@@ -1,3 +1,8 @@
+@extends('layouts.app')
+@section('title', $model->name . ' · Plan Kanban v2')
+@section('header_title', $model->name . ' · Plan Kanban v2')
+
+@section('content')
 {{-- v2 Kanban Template (drop-in) --}}
 {{-- Lanes driven by plan item status --}}
 <div class="grid grid-cols-4 gap-4">
@@ -79,3 +84,4 @@
   </div>
 
 </div>
+@endsection
