@@ -196,9 +196,9 @@
               </div>
 
               {{-- Placeholder for EXIT PLAN text - wired later when we store it --}}
-              {{-- <div class="small" style="margin-top:4px">
+              <div class="small" style="margin-top:4px">
                 <a href="#" class="exit-plan-link">Exit plan</a>
-              </div> --}}
+              </div>
             </article>
           @empty
             <div class="small">No open positions.</div>
@@ -217,14 +217,17 @@
             <article class="card" style="padding:12px">
               <div class="bold">{{ strtoupper($t->side) }} · {{ $t->ticker }}</div>
 
+              <div class="small">Entry Time: <span class="bold">{{ optional($t->opened_at)->format('Y-m-d H:i:s') }}</span></div>
               <div class="small">Entry Price: <span class="bold">{{ number_format($t->entry_price,4) }}</span></div>
+
+              <div class="small">Exit Time: <span class="bold">{{ optional($t->closed_at)->format('Y-m-d H:i:s') }}</span></div>
               <div class="small">Exit Price: <span class="bold">{{ number_format($t->exit_price,4) }}</span></div>
 
               <div class="small">Quantity: <span class="bold">{{ number_format($t->qty,4) }}</span></div>
               <div class="small">Holding Time: <span class="bold">{{ $t->holding_seconds ?? 0 }}s</span></div>
 
               <div class="small">Notional (Entry): <span class="bold">${{ number_format($t->notional_entry ?? 0,2) }}</span></div>
-              <div class="small">Notional (Exit): <span class="bold">${{ number_format($t->notional_exit ?? 0,2) }}</span></div>
+              <div class="small">Notional (Exit): <span class="bold">${{ ($t->notional_exit == 0) ? (number_format(($t->qty * $t->exit_price) ?? 0,2)) : (number_format($t->notional_exit ?? 0,2)) }}</span></div>
 
               <div class="small">Total Fees: <span class="bold">${{ number_format($t->fees ?? 0,2) }}</span></div>
 

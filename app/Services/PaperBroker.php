@@ -294,6 +294,7 @@ class PaperBroker
                $exitPrice
            );
            $trade->exit_price = $exitPrice;
+           $trade->notional_exit  = $trade->qty * $exitPrice; 
            $trade->net_pnl    = $netPnl;           
            $trade->closed_at  = now();
            $trade->save();
