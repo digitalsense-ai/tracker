@@ -66,6 +66,11 @@ class Kernel extends ConsoleKernel
                     '--model_id' => $modelId,
                     '--date' => now()->format('Y-m-d'),
                 ]);
+
+                // Run the command for v2
+                \Artisan::call('ai:premarket-v2', [
+                    '--model_id' => $modelId,                  
+                ]);
             }
         })
         ->name('ai-premarket-daily')   // required for withoutOverlapping
