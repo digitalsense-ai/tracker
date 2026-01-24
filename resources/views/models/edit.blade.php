@@ -49,7 +49,7 @@
 
       <div class="card" style="padding:16px">
         <div class="bold" style="margin-bottom:6px">Pre-Market Prompt</div>
-        <textarea id="premarket_prompt" name="premarket_prompt" rows="10" class="table" {{ $model->premarket_prompt_status == 1 ? '' : 'disabled' }} style="width:100%;padding:8px">{{ old('premarket_prompt',$model->premarket_prompt) }}</textarea>
+        <textarea id="premarket_prompt" name="premarket_prompt" rows="10" class="table" {{ isset($model->id) ? ($model->premarket_prompt_status == 1 ? '' : 'disabled') : '' }} style="width:100%;padding:8px">{{ old('premarket_prompt',$model->premarket_prompt) }}</textarea>
         <div class="small" style="margin-top:6px">
           This is the <b>big planning prompt</b> that runs before the market opens and builds today&apos;s strategy playbook based on news, trends, funding, and your risk rules.
         </div>
@@ -129,7 +129,7 @@
     <section class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
       <div class="card" style="padding:16px">
         <div class="bold" style="margin-bottom:6px">Start Prompt</div>
-        <textarea id="start_prompt" name="start_prompt" rows="16" class="table" style="width:100%;padding:8px">{{ old('start_prompt',$model->start_prompt) }}</textarea>
+        <textarea id="start_prompt" name="start_prompt" rows="16" class="table" {{ isset($model->id) ? ($model->start_prompt_status == 1 ? '' : 'disabled') : '' }}  style="width:100%;padding:8px">{{ old('start_prompt',$model->start_prompt) }}</textarea>
         <div class="small" style="margin-top:6px">Used once at boot/start to initialize the model’s policy and state.</div>
 
         <div style="display:flex;justify-content: flex-end; align-items:center;gap:8px; margin-top: 10px;">                    
@@ -148,7 +148,7 @@
 
       <div class="card" style="padding:16px">
         <div class="bold" style="margin-bottom:6px">Loop / Check Prompt</div>
-        <textarea id="loop_prompt" name="loop_prompt" rows="16" class="table" style="width:100%;padding:8px">{{ old('loop_prompt',$model->loop_prompt) }}</textarea>
+        <textarea id="loop_prompt" name="loop_prompt" rows="16" class="table" {{ isset($model->id) ? ($model->loop_prompt_status == 1 ? '' : 'disabled') : '' }}  style="width:100%;padding:8px">{{ old('loop_prompt',$model->loop_prompt) }}</textarea>
         <div class="small" style="margin-top:6px">
           Executed every <b>{{ old('check_interval_min',$model->check_interval_min ?? 15) }}</b> min.
           Should output an action + short reasoning. (e.g. HOLD / CLOSE / OPEN)
@@ -194,43 +194,46 @@
       var type = btn.data('type');
       var currentStatus = btn.data('status');
 
-      $.ajax({
-          url: '/toggle-prompt-status/' + id,
-          type: 'POST',
-          data: {
-              status: currentStatus,
-              prompt_name: name
-          },
-          success: function (response) {
+      if(id)
+      {
+        $.ajax({
+            url: '/toggle-prompt-status/' + id,
+            type: 'POST',
+            data: {
+                status: currentStatus,
+                prompt_name: name
+            },
+            success: function (response) {
 
-              // Update button text
-              if (response.new_status == 1)
-              {
-                btn.text('Disable');
-                $("#" + type + "_prompt").removeAttr('disabled');
-                $('#prompt_notification_' + type).css('color', 'green');
-              }
-              else
-              {
-                btn.text('Enable');
-                $("#" + type + "_prompt").attr('disabled', 'disabled');
-                $('#prompt_notification_' + type).css('color', 'red');
-              }
-             
-              // Update data-status
-              btn.data('status', response.new_status);
+                // Update button text
+                if (response.new_status == 1)
+                {
+                  btn.text('Disable');
+                  $("#" + type + "_prompt").removeAttr('disabled');
+                  $('#prompt_notification_' + type).css('color', 'green');
+                }
+                else
+                {
+                  btn.text('Enable');
+                  $("#" + type + "_prompt").attr('disabled', 'disabled');
+                  $('#prompt_notification_' + type).css('color', 'red');
+                }
+               
+                // Update data-status
+                btn.data('status', response.new_status);
 
-              // Optional: update status column in the table
-              $('#prompt_notification_' + type).html(
-                  name + ' is ' + (response.new_status ? 'Enabled' : 'Disabled')
-              );
-          },
+                // Optional: update status column in the table
+                $('#prompt_notification_' + type).html(
+                    name + ' is ' + (response.new_status ? 'Enabled' : 'Disabled')
+                );
+            },
 
-          error: function () {  
-            $('#prompt_notification_' + type).css('color', 'red');            
-            $('#prompt_notification_' + type).html('Error updating '+ name +' status.');
-          }
-      });
+            error: function () {  
+              $('#prompt_notification_' + type).css('color', 'red');            
+              $('#prompt_notification_' + type).html('Error updating '+ name +' status.');
+            }
+        });
+      }
   }
 </script>
 @endsection
