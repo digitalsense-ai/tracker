@@ -43,7 +43,11 @@ class AiPremarket extends Command
                 $this->info("Running pre-market plan for model {$model->id} ({$model->name}) on {$tradeDate}...");
 
                 $marketData = app(\App\Services\MarketData::class);
-                $universe = ['AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ']; // pick yours
+                //$universe = ['AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ']; // pick yours
+
+                $universe = app(\App\Services\SymbolUniverse::class)->candidates(
+                   $model->symbol_limit ?? 20
+                );
 
                 $prices = [];
                 foreach ($universe as $sym) {

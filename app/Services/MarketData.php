@@ -3,8 +3,28 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 
+use App\Models\SymbolMapping;
+
 class MarketData
 {
+    public function getPrice(string $symbol): ?float {
+        $map = SymbolMapping::where('symbol', strtoupper($symbol))->where('enabled_for_ai',true)->first();
+
+        if(!$map) return null;
+
+        $resp = Http::withToken(config('services.saxo.access_token'))
+            ->get(config('services.saxo.base_url').'/trade/v1/infoprices',[
+            'Uic'=>$map->saxo_uic,
+            'AssetType'=>$map->saxo_asset_type,
+            ]);
+
+        if(!$resp->successful()) return null;
+
+        $q = $resp->json()['Quote'] ?? [];
+
+        return $q['Mid'] ?? $q['Ask'] ?? $q['Bid'] ?? null;
+    }
+    /*
    public function getPrice(string $symbol): float
     {
         $apiKey = config('services.finnhub.key');
@@ -54,4 +74,5 @@ class MarketData
 
         return (float) $price;
     }
+    */
 }
