@@ -40,14 +40,9 @@ class MarketData
                 'AssetType' => $map->saxo_asset_type,
               ]);
 
-        \Log::channel('saxo')->info(
-		    'Saxo InfoPrice Response',
-		    ['resp' => $resp]
-		);
-
-
         \Log::channel('saxo')->info('Saxo InfoPrice response', [
           'symbol' => $symbol,
+          'resp' => $resp
           'status' => $resp->status(),
           'body'   => $resp->body(),
         ]);
