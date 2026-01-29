@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\SymbolMapping;
 
@@ -11,7 +12,7 @@ class MarketData
         $map = SymbolMapping::where('symbol', strtoupper($symbol))->where('enabled_for_ai',true)->first();
 
         if(!$map) return null;
-
+/*
         $resp = Http::withToken(config('services.saxo.access_token'))
             ->get(config('services.saxo.base_url').'/trade/v1/infoprices',[
             'Uic'=>$map->saxo_uic,
@@ -21,6 +22,42 @@ class MarketData
         if(!$resp->successful()) return null;
 
         $q = $resp->json()['Quote'] ?? [];
+
+        return $q['Mid'] ?? $q['Ask'] ?? $q['Bid'] ?? null;
+*/
+
+        \Log::channel('saxo')->info('Saxo InfoPrice request', [
+         'symbol' => $symbol,
+         'uic' => $map->saxo_uic,
+         'assetType' => $map->saxo_asset_type,
+         'accountKey' => config('services.saxo.account_key'),
+        ]);
+        
+        $resp = Http::withToken(config('services.saxo.access_token'))
+              ->timeout(10)
+              ->get(config('services.saxo.base_url').'/trade/v1/infoprices', [
+                'Uic' => $map->saxo_uic,
+                'AssetType' => $map->saxo_asset_type,
+              ]);
+
+        \Log::channel('saxo')->info(
+		    'Saxo InfoPrice Response',
+		    ['resp' => $resp]
+		);
+
+
+        \Log::channel('saxo')->info('Saxo InfoPrice response', [
+          'symbol' => $symbol,
+          'status' => $resp->status(),
+          'body'   => $resp->body(),
+        ]);
+
+        if (!$resp->successful()) return null;
+
+        $data = $resp->json();
+        \Log::channel('saxo')->info('Saxo InfoPrice json', ['symbol'=>$symbol, 'json'=>$data]);
+
+        $q = $data['Quote'] ?? [];
 
         return $q['Mid'] ?? $q['Ask'] ?? $q['Bid'] ?? null;
     }

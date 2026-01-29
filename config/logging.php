@@ -127,6 +127,12 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'saxo' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/saxo.log'),
+            'level' => 'info',
+        ],
+
     ],
 
 ];

@@ -44,4 +44,10 @@ return [
        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
     ],
 
+    'saxo' => [       
+        'base_url' => env('SAXO_BASE_URL'),
+        'access_token' => env('SAXO_ACCESS_TOKEN'),
+        'account_key' => env('SAXO_ACCOUNT_KEY')     
+    ],
+
 ];
