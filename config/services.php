@@ -43,11 +43,16 @@ return [
        'key'   => env('OPENAI_API_KEY'),
        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
     ],
+    
+    'saxo' => [
+        'base_url'  => env('SAXO_BASE_URL'),   // https://gateway.saxobank.com/sim/openapi
+        'auth_url'  => env('SAXO_AUTH_URL'),   // https://gateway.saxobank.com/sim/openapi/token
+        'app_key'   => env('SAXO_APP_KEY'),
+        'app_secret'=> env('SAXO_APP_SECRET'),
 
-    'saxo' => [       
-        'base_url' => env('SAXO_BASE_URL'),
         'access_token' => env('SAXO_ACCESS_TOKEN'),
-        'account_key' => env('SAXO_ACCOUNT_KEY')     
+        'account_key' => env('SAXO_ACCOUNT_KEY')
     ],
+
 
 ];

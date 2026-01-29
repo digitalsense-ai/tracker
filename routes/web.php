@@ -74,6 +74,33 @@ Route::get('/leaderboard', [\App\Http\Controllers\LeaderboardController::class, 
 Route::get('/live', [\App\Http\Controllers\LiveController::class, 'index'])
    ->name('live.index');
 
+Route::get('/saxo/login', function() {
+    $state = csrf_token();
+    $url = 'https://sim.logonvalidation.net/authorize?' . http_build_query([
+        'response_type' => 'code',
+        'client_id'     => config('services.saxo.app_key'),
+        'redirect_uri'  => route('saxo.callback'),
+        'state'         => $state,
+    ]);
+    return redirect()->away($url);
+})->name('saxo.login');
+
+Route::get('/saxo/callback', function(\Illuminate\Http\Request $request, \App\Services\SaxoTokenService $tokenService) {
+    $request->validate([
+        'code'  => 'required|string',
+        'state' => 'required|string',
+    ]);
+
+    if ($request->state !== csrf_token()) {
+        abort(403, 'Invalid state');
+    }
+
+    $accessToken = $tokenService->getToken($request->code);
+
+    return "Saxo token cached! You can now call MarketData->getPrice()";
+})->name('saxo.callback');
+
+
 // Route::get('/test-ai-model', function () {
 //     $m = \App\Models\AiModel::first() ?? new \App\Models\AiModel([
 //         'name' => 'DeepSeek V3.1',
