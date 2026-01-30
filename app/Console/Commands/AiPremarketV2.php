@@ -43,14 +43,22 @@ class AiPremarketV2 extends Command
 
             // 2) Universe (IMPORTANT)
             // Replace this with your own watchlist source (DB/config).
-            $universe = array_values(array_unique(array_filter([
-                'AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ'
-            ])));
+            // $universe = array_values(array_unique(array_filter([
+            //     'AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ'
+            // ])));
+
+            $universe = app(\App\Services\SymbolUniverse::class)->candidates(
+               $model->symbol_limit ?? 20
+            );
 
             // 3) Fetch LIVE prices for universe
             $prices = [];
             foreach ($universe as $sym) {
-                $prices[$sym] = ['last' => (float) $marketData->getPrice($sym)];
+                $last_price = (float) $marketData->getPrice($sym);
+                
+                $prices[$sym] = ['last' => $last_price];
+
+                $this->info("Pre-market price for symbol {$sym} - {$last_price}");
             }
 
             $state = [

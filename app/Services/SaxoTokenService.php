@@ -21,12 +21,12 @@ class SaxoTokenService
      */
     public function getToken(string $authorizationCode = null): string
     {
-        // 1️⃣ If token exists in cache, return it
+        // 1️⃣ If access token exists in cache, return it
         if (Cache::has(self::CACHE_KEY)) {
             return Cache::get(self::CACHE_KEY);
         }
 
-        // 2️⃣ If authorization code provided, exchange it for access token
+        // 2️⃣ If authorization code provided, exchange it for token
         if ($authorizationCode) {
             return $this->exchangeCode($authorizationCode);
         }
@@ -34,7 +34,16 @@ class SaxoTokenService
         // 3️⃣ Try refresh token if exists
         $refreshToken = Cache::get(self::REFRESH_KEY);
         if ($refreshToken) {
-            return $this->refreshToken($refreshToken);
+            try {
+                return $this->refreshToken($refreshToken);
+            } catch (\Exception $e) {
+                // Refresh failed — clear tokens and log
+                $this->clearToken();
+                Log::channel('saxo')->warning('Refresh token failed. Cleared cached tokens. ' . $e->getMessage());
+                
+                // If authorization code is not provided, instruct user to re-login
+                throw new \Exception('Saxo refresh token invalid. Please visit /saxo/login to authorize your app.');
+            }
         }
 
         // 4️⃣ No token and no code → instruct first login

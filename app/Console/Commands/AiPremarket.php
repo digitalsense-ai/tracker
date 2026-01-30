@@ -51,7 +51,10 @@ class AiPremarket extends Command
 
                 $prices = [];
                 foreach ($universe as $sym) {
-                   $prices[$sym] = ['last' => (float) $marketData->getPrice($sym)];
+                    $last_price = (float) $marketData->getPrice($sym);
+                   $prices[$sym] = ['last' => $last_price];
+
+                   $this->info("Pre-market price for symbol {$sym} - {$last_price}");
                 }
 
                 // Build a lightweight state snapshot for planning
