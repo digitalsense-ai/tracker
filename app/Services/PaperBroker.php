@@ -279,7 +279,10 @@ class PaperBroker
        if (!$position) {
            return;
        }
-       $exitPrice = (float) $this->marketData->getPrice($symbol);
+       //$exitPrice = (float) $this->marketData->getPrice($symbol);
+       $marketData = app(\App\Services\MarketData::class);
+       $exitPrice      = (float) $marketData->getPrice($symbol);
+
        // Close any open trades for that symbol as well
        $openTrades = Trade::where('ai_model_id', $model->id)
                        //->where('symbol', $symbol)
@@ -329,7 +332,10 @@ class PaperBroker
            ->where('status', 'open')
            ->get();
        foreach ($openPositions as $p) {
-           $price = (float) $this->marketData->getPrice($p->ticker);
+           //$price = (float) $this->marketData->getPrice($p->ticker);
+            $marketData = app(\App\Services\MarketData::class);
+            $price      = (float) $marketData->getPrice($p->ticker);
+
            //$direction = strtoupper($p->side) === 'SELL' ? -1 : 1;
            $direction = ($p->side === 'short') ? -1 : 1;
            $pnl = ($price - $p->avg_price) * $p->qty * $direction;
