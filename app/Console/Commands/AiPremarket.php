@@ -90,6 +90,14 @@ class AiPremarket extends Command
                         'default_risk_per_strategy_pct' => $model->default_risk_per_strategy_pct,
                     ],
                 ];
+
+                $candidateLimit = (int) config('trading.scanner.candidate_limit', 20);
+                $scanner = app(\App\Services\Scanner\SymbolScanner::class);
+                $candidates = $scanner->candidates($candidateLimit);
+                $state['candidates'] = $candidates;
+
+                \Log::info('Premarket candidates', ['candidates' => $state['candidates'] ?? []]);
+
                 $stateJson = json_encode($state, JSON_PRETTY_PRINT);
 
 //                 $systemPrompt = <<<TXT
@@ -133,6 +141,7 @@ IMPORTANT:
 - If you do not have a price for a symbol, do NOT include that symbol in the plan.
 - active_on_open strategies must have entry_zone within ~0–3% of the current price (so they are realistically tradable today).
 - sleeper strategies may be further away, but must explain the trigger condition in entry_zone.
+- You may ONLY select symbols from state.candidates.
 Each strategy MUST include:
 - entry_zone_low: number
 - entry_zone_high: number
