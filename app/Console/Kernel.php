@@ -52,7 +52,7 @@ class Kernel extends ConsoleKernel
              ->at('23:30')
              ->appendOutputTo(storage_path('logs/nyopen.log'));
 
-        $schedule->command('ai:tick')->everyMinute();
+        $schedule->command('ai:tick')->everyMinute()->withoutOverlapping()->onOneServer();
 
         // Daily at 9 AM
         $schedule->call(function () {
@@ -67,10 +67,14 @@ class Kernel extends ConsoleKernel
                     '--date' => now()->format('Y-m-d'),
                 ]);
 
+                sleep(5); // wait 5 seconds
+
                 // Run the command for v2
                 \Artisan::call('ai:premarket-v2', [
                     '--model_id' => $modelId,                  
                 ]);
+
+                sleep(5); // optional: pause before next model
             }
         })
         ->name('ai-premarket-daily')   // required for withoutOverlapping

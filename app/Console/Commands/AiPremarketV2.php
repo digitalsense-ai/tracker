@@ -119,20 +119,38 @@ Additional planning instructions:
 TXT;
 
             $apiKey = config('services.openai.key');
-            $response = Http::withToken($apiKey)->post('https://api.openai.com/v1/responses', [
-                'model' => config('services.openai.model', 'gpt-4.1-mini'),
-                'input' => [
-                    [
-                        'role' => 'system',
-                        'content' => [['type' => 'input_text', 'text' => $systemPrompt]],
+
+            $attempts = 0;
+            $maxAttempts = 5;
+            $delay = 5; // seconds
+
+            do {
+                $response = Http::withToken($apiKey)->post('https://api.openai.com/v1/responses', [
+                    'model' => config('services.openai.model', 'gpt-4.1-mini'),
+                    'input' => [
+                        [
+                            'role' => 'system',
+                            'content' => [['type' => 'input_text', 'text' => $systemPrompt]],
+                        ],
+                        [
+                            'role' => 'user',
+                            'content' => [['type' => 'input_text', 'text' => $userPrompt]],
+                        ],
                     ],
-                    [
-                        'role' => 'user',
-                        'content' => [['type' => 'input_text', 'text' => $userPrompt]],
-                    ],
-                ],
-                'max_output_tokens' => 2048,
-            ]);
+                    'max_output_tokens' => 2048,
+                ]);
+
+                // If NOT rate-limited, exit loop
+                if ($response->status() !== 429) {
+                    break;
+                }
+
+                // Hit rate limit → wait + backoff
+                sleep($delay);
+                $delay *= 2; // 1s → 2s → 4s → 8s
+                $attempts++;
+
+            } while ($attempts < $maxAttempts);
 
             if (!$response->successful()) {
                 throw new \RuntimeException('OpenAI error: '.$response->body());

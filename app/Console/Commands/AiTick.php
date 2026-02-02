@@ -3,6 +3,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\AiModel;
 use App\Models\ModelLog;
@@ -32,9 +33,16 @@ class AiTick extends Command
 
        foreach ($models as $model) {
            try {
+//             Log::info('OpenAI debug', [
+//   'env' => app()->environment(),
+//   'model' => config('services.openai.model'),
+//   'key_last4' => substr(config('services.openai.key'), -4),
+// ]);
+
                // ------------------------------
                // 1) Respect check interval
                // ------------------------------
+            /*
                if (!empty($model->last_checked_at)) {
                    $last = $model->last_checked_at instanceof Carbon
                        ? $model->last_checked_at
@@ -46,6 +54,30 @@ class AiTick extends Command
                        continue;
                    }
                }
+               */
+
+               $interval = $model->check_interval
+                    ?? $model->check_interval_min
+                    ?? 1;
+
+                /**
+                 * 🔒 ATOMIC CLAIM
+                 * Only ONE process can pass this
+                 */
+                $claimed = AiModel::where('id', $model->id)
+                    ->where(function ($q) use ($now, $interval) {
+                        $q->whereNull('last_checked_at')
+                          ->orWhere('last_checked_at', '<=', $now->copy()->subMinutes($interval));
+                    })
+                    ->update([
+                        'last_checked_at' => $now, // claim immediately
+                    ]);
+
+                // Another process already took it → skip safely
+                if ($claimed === 0) {
+                    continue;
+                }
+        
                $this->info("Ticking model: {$model->name}");
                // ------------------------------
                // 2) Load state for this model
@@ -401,6 +433,12 @@ TXT;
                if (empty($apiKey)) {
                    throw new \RuntimeException('OPENAI_API_KEY is not set.');
                }
+
+              $attempts = 0;
+              $maxAttempts = 5;
+              $delay = 1; // seconds
+
+              do {
                $response = Http::withToken($apiKey)
                    ->timeout(20)
                    ->post('https://api.openai.com/v1/responses', [
@@ -427,6 +465,38 @@ TXT;
                        ],
                         'max_output_tokens' => 1024,
                    ]);
+                   
+                  // If NOT rate-limited, exit loop
+                  if ($response->status() !== 429) {                      
+                      break;
+                  }
+
+                  if ($response->status() === 429) {
+                      ModelLog::create([
+                          'ai_model_id' => $model->id,
+                          'action'      => 'OPENAI_429_DEBUG',
+                          'payload'     => [
+                              'body' => $response->json(),
+                              'headers' => [
+                                  'x-ratelimit-limit-requests' => $response->header('x-ratelimit-limit-requests'),
+                                  'x-ratelimit-remaining-requests' => $response->header('x-ratelimit-remaining-requests'),
+                                  'x-ratelimit-reset-requests' => $response->header('x-ratelimit-reset-requests'),
+                                  'x-ratelimit-limit-tokens' => $response->header('x-ratelimit-limit-tokens'),
+                                  'x-ratelimit-remaining-tokens' => $response->header('x-ratelimit-remaining-tokens'),
+                                  'x-ratelimit-reset-tokens' => $response->header('x-ratelimit-reset-tokens'),
+                                  'retry-after' => $response->header('retry-after'),
+                              ],
+                          ],
+                      ]);
+                  }
+
+                  // Hit rate limit → wait + backoff
+                  sleep($delay);
+                  $delay *= 2; // 1s → 2s → 4s → 8s
+                  $attempts++;
+
+              } while ($attempts < $maxAttempts);
+
                if (!$response->successful()) {
                    throw new \RuntimeException(
                        'OpenAI API error: ' . $response->status() . ' ' . $response->body()
@@ -596,14 +666,17 @@ TXT;
            } catch (\Throwable $e) {
                $this->error("Error in model {$model->name}: " . $e->getMessage());
 
-               $model->last_checked_at = now();
-               $model->save();
+               // $model->last_checked_at = now();
+               // $model->save();
                
                ModelLog::create([
                    'ai_model_id' => $model->id,
                    'action'      => 'ERROR',
                    'payload'     => [
-                       'error' => $e->getMessage(),
+                       'error' => $e->getMessage(),                      
+                        'file'    => $e->getFile(),
+                        'line'    => $e->getLine(),
+                        'trace'   => $e->getTraceAsString(),
                    ],
                ]);
                continue;
