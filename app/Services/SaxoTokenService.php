@@ -35,7 +35,11 @@ class SaxoTokenService
         $refreshToken = Cache::get(self::REFRESH_KEY);
         if ($refreshToken) {
             try {
-                return $this->refreshToken($refreshToken);
+                //return $this->refreshToken($refreshToken);
+                return Cache::lock('saxo_token_refresh', 10)->block(5, function () use ($refreshToken) {
+                    return $this->refreshToken($refreshToken);
+                });
+
             } catch (\Exception $e) {
                 // Refresh failed — clear tokens and log
                 $this->clearToken();
@@ -68,7 +72,8 @@ class SaxoTokenService
         $data = $response->json();
 
         Cache::put(self::CACHE_KEY, $data['access_token'], now()->addSeconds($data['expires_in'] - 60));
-        Cache::put(self::REFRESH_KEY, $data['refresh_token']);
+        //Cache::put(self::REFRESH_KEY, $data['refresh_token']);
+        Cache::forever(self::REFRESH_KEY, $data['refresh_token']);
 
         Log::channel('saxo')->info('Saxo token cached successfully');
 
@@ -91,7 +96,8 @@ class SaxoTokenService
         $data = $response->json();
 
         Cache::put(self::CACHE_KEY, $data['access_token'], now()->addSeconds($data['expires_in'] - 60));
-        Cache::put(self::REFRESH_KEY, $data['refresh_token']);
+        //Cache::put(self::REFRESH_KEY, $data['refresh_token']);
+        Cache::forever(self::REFRESH_KEY, $data['refresh_token']);
 
         Log::channel('saxo')->info('Saxo token refreshed successfully');
 
