@@ -55,7 +55,7 @@ class SaxoTokenService
         throw new \Exception('No Saxo token available. Please visit /saxo/login to authorize your app.');
     }
 
-    private function exchangeCode(string $code): string
+    public function exchangeCode(string $code): string
     {
         $response = Http::asForm()->post('https://sim.logonvalidation.net/token', [
             'grant_type'    => 'authorization_code',

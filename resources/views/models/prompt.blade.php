@@ -20,6 +20,9 @@
   <a href="{{ route('models.prompt', [$m->slug, 1]) }}" class="{{ ($promptno == 1) ? 'active' : '' }}">Pre-Market Prompt</a>
   <a href="{{ route('models.prompt', [$m->slug, 2]) }}" class="{{ ($promptno == 2) ? 'active' : '' }}">Start Prompt</a>
   <a href="{{ route('models.prompt', [$m->slug, 3]) }}" class="{{ ($promptno == 3) ? 'active' : '' }}">Loop / Check Prompt</a>
+
+  <a href="{{ route('models.kanban', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban</a>
+  <a href="{{ route('models.kanban.v2', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>
 </div>
 
 @if($promptno == 1)

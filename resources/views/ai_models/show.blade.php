@@ -15,11 +15,14 @@
 <div class="nav-tabs">
   <a href="{{ route('models.show', $m->slug) }}" class="active">Overview</a>
   <a href="{{ route('models.chat', $m->slug) }}">Model Chat</a>
-  <a href="{{ route('models.log', $m->slug) }}">Raw Log</a>
+  <a href="{{ route('models.log', $m->slug) }}">Raw Log</a>  
 
   <a href="{{ route('models.prompt', [$m->slug, 1]) }}">Pre-Market Prompt</a>
   <a href="{{ route('models.prompt', [$m->slug, 2]) }}">Start Prompt</a>
   <a href="{{ route('models.prompt', [$m->slug, 3]) }}">Loop / Check Prompt</a>
+
+  <a href="{{ route('models.kanban', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban</a>
+  <a href="{{ route('models.kanban.v2', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>
 </div>
 
 <div class="card">

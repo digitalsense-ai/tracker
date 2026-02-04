@@ -74,31 +74,69 @@ Route::get('/leaderboard', [\App\Http\Controllers\LeaderboardController::class, 
 Route::get('/live', [\App\Http\Controllers\LiveController::class, 'index'])
    ->name('live.index');
 
-Route::get('/saxo/login', function() {
-    $state = csrf_token();
+Route::get('/saxo/login', function () {
+    $state = Str::random(40);
+
+    session(['saxo_oauth_state' => $state]);
+
     $url = 'https://sim.logonvalidation.net/authorize?' . http_build_query([
         'response_type' => 'code',
         'client_id'     => config('services.saxo.app_key'),
         'redirect_uri'  => route('saxo.callback'),
         'state'         => $state,
     ]);
+
     return redirect()->away($url);
 })->name('saxo.login');
 
-Route::get('/saxo/callback', function(\Illuminate\Http\Request $request, \App\Services\SaxoTokenService $tokenService) {
+Route::get('/saxo/callback', function (
+    Illuminate\Http\Request $request,
+    App\Services\SaxoTokenService $tokenService
+) {
     $request->validate([
         'code'  => 'required|string',
         'state' => 'required|string',
     ]);
 
-    if ($request->state !== csrf_token()) {
-        abort(403, 'Invalid state');
+    if ($request->state !== session('saxo_oauth_state')) {
+        abort(403, 'Invalid OAuth state');
     }
 
-    $accessToken = $tokenService->getToken($request->code);
+    // 🔑 Exchange ONCE
+    $tokenService->exchangeCode($request->code);
 
-    return "Saxo token cached! You can now call MarketData->getPrice()";
+    // Optional: clear state
+    session()->forget('saxo_oauth_state');
+
+    return 'Saxo connected successfully 🎉';
 })->name('saxo.callback');
+
+
+// Route::get('/saxo/login', function() {
+//     $state = csrf_token();
+//     $url = 'https://sim.logonvalidation.net/authorize?' . http_build_query([
+//         'response_type' => 'code',
+//         'client_id'     => config('services.saxo.app_key'),
+//         'redirect_uri'  => route('saxo.callback'),
+//         'state'         => $state,
+//     ]);
+//     return redirect()->away($url);
+// })->name('saxo.login');
+
+// Route::get('/saxo/callback', function(\Illuminate\Http\Request $request, \App\Services\SaxoTokenService $tokenService) {
+//     $request->validate([
+//         'code'  => 'required|string',
+//         'state' => 'required|string',
+//     ]);
+
+//     if ($request->state !== csrf_token()) {
+//         abort(403, 'Invalid state');
+//     }
+
+//     $accessToken = $tokenService->getToken($request->code);
+
+//     return "Saxo token cached! You can now call MarketData->getPrice()";
+// })->name('saxo.callback');
 
 
 // Route::get('/test-ai-model', function () {

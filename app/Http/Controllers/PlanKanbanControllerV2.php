@@ -12,6 +12,8 @@ class PlanKanbanControllerV2 extends Controller
 {
     public function index(string $slug, Request $request)
     {
+        $models = AiModel::orderByDesc('return_pct')->get();
+
         $model = AiModel::where('slug', $slug)->firstOrFail();
 
         // Optional date filter. If not provided, use latest plan for model.
@@ -102,6 +104,7 @@ class PlanKanbanControllerV2 extends Controller
         $laneClosed = $closedTrades;
 
         return view('models.kanban_v2', compact(
+            'models',
             'model',
             'planRow',
             'laneIdeaPool',

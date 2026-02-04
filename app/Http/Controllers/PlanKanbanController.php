@@ -16,6 +16,8 @@ class PlanKanbanController extends Controller
      */
     public function index(string $slug, Request $request)
     {
+        $models = AiModel::orderByDesc('return_pct')->get();
+
         $model = AiModel::where('slug', $slug)->firstOrFail();
 
         //$date = $request->query('date', now()->toDateString());
@@ -94,6 +96,7 @@ class PlanKanbanController extends Controller
         $approved = $approvedFiltered;
 
         return view('models.kanban', [
+            'models'    => $models,
             'model'           => $model,
             'date'            => $date,            
             'plan'            => ($date) ? $plans->first() : $plan,

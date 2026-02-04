@@ -48,13 +48,21 @@ class AiPremarket extends Command
                 $universe = app(\App\Services\SymbolUniverse::class)->candidates(
                    $model->symbol_limit ?? 20
                 );
+                $this->info("Pre-market symbols: " . count($universe));
 
                 $prices = [];
                 foreach ($universe as $sym) {
                     $last_price = (float) $marketData->getPrice($sym);
+
+                    $this->info("Pre-market price for symbol {$sym} - {$last_price}");
+                    
+                    if ($last_price <= 0) {
+                        continue; // ❗ drop symbol entirely
+                    }
+
                    $prices[$sym] = ['last' => $last_price];
 
-                   $this->info("Pre-market price for symbol {$sym} - {$last_price}");
+                   
                 }
 
                 // Build a lightweight state snapshot for planning
@@ -94,7 +102,17 @@ class AiPremarket extends Command
                 $candidateLimit = (int) config('trading.scanner.candidate_limit', 20);
                 $scanner = app(\App\Services\Scanner\SymbolScanner::class);
                 $candidates = $scanner->candidates($candidateLimit);
-                $state['candidates'] = $candidates;
+                //$state['candidates'] = $candidates;
+                // Only keep candidates that have valid prices
+                $state['candidates'] = array_values(array_intersect(
+                    $candidates,
+                    array_keys($prices)
+                ));
+
+                \Log::info('Premarket usable symbols', [
+                    'symbols' => array_keys($prices),
+                ]);
+
 
                 \Log::info('Premarket candidates', ['candidates' => $state['candidates'] ?? []]);
 
@@ -264,6 +282,7 @@ TXT;
                         'state'    => $state,
                         'plan'     => $plan,
                         'raw_text' => $outputText,
+                        'dailyPlan' => $dailyPlan,
                     ],
                 ]);
 

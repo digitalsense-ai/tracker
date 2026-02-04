@@ -3,6 +3,7 @@
 @section('header_title', $model->name . ' · Plan Kanban')
 
 @section('content')
+  <link rel="stylesheet" href="/css/ai.css">
   @if (session('status'))
     <div class="card" style="padding:12px;margin-bottom:12px;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;">
       {{ session('status') }}
@@ -13,6 +14,25 @@
       {{ session('error') }}
     </div>
   @endif
+
+  <div class="nav-tabs">
+    @foreach($models as $m)
+      <a href="{{ route('models.show', $m->slug) }}" class="{{ ($m->slug == $model->slug) ? 'active' : '' }}">{{ $m->name }}</a>
+    @endforeach
+  </div>
+
+  <div class="nav-tabs">
+    <a href="{{ route('models.show', $model->slug) }}">Overview</a>
+    <a href="{{ route('models.chat', $model->slug) }}">Model Chat</a>
+    <a href="{{ route('models.log', $model->slug) }}">Raw Log</a>
+
+    <a href="{{ route('models.prompt', [$model->slug, 1]) }}">Pre-Market Prompt</a>
+    <a href="{{ route('models.prompt', [$model->slug, 2]) }}">Start Prompt</a>
+    <a href="{{ route('models.prompt', [$model->slug, 3]) }}">Loop / Check Prompt</a>
+
+    <a href="{{ route('models.kanban', [$model->slug, 'date' => now()->toDateString()]) }}" class="active">Kanban</a>
+    <a href="{{ route('models.kanban.v2', [$model->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>
+  </div>
 
   <section class="card" style="padding:16px;margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">

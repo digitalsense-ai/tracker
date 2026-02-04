@@ -6,6 +6,26 @@
 {{-- v2 Kanban Template (drop-in) --}}
 {{-- Lanes driven by plan item status --}}
 <div class="grid grid-cols-4 gap-4">
+  <link rel="stylesheet" href="/css/ai.css">
+  
+  <div class="nav-tabs">
+    @foreach($models as $m)
+      <a href="{{ route('models.show', $m->slug) }}" class="{{ ($m->slug == $model->slug) ? 'active' : '' }}">{{ $m->name }}</a>
+    @endforeach
+  </div>
+
+  <div class="nav-tabs">
+    <a href="{{ route('models.show', $model->slug) }}">Overview</a>
+    <a href="{{ route('models.chat', $model->slug) }}">Model Chat</a>
+    <a href="{{ route('models.log', $model->slug) }}">Raw Log</a>
+
+    <a href="{{ route('models.prompt', [$model->slug, 1]) }}">Pre-Market Prompt</a>
+    <a href="{{ route('models.prompt', [$model->slug, 2]) }}">Start Prompt</a>
+    <a href="{{ route('models.prompt', [$model->slug, 3]) }}">Loop / Check Prompt</a>
+
+    <a href="{{ route('models.kanban', [$model->slug, 'date' => now()->toDateString()]) }}">Kanban</a>
+    <a href="{{ route('models.kanban.v2', [$model->slug, 'date' => now()->toDateString()]) }}" class="active">Kanban v2</a>
+  </div>
 
   {{-- Lane 1: Idea Pool --}}
   <div class="card">
