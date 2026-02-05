@@ -55,6 +55,8 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('ai:tick')->everyMinute()->withoutOverlapping()->onOneServer();
 
+        $schedule->command('saxo:sync-instruments')->weekly();
+
         // Daily at 9 AM
         $schedule->call(function () {
             // Get all models to process
@@ -62,6 +64,14 @@ class Kernel extends ConsoleKernel
             $models = AiModel::where('active', true)->pluck('id');
 
             foreach ($models as $modelId) {
+                // Run the command for each model
+                \Artisan::call('scanner:run', [
+                    '--model_id' => $modelId,
+                    '--date' => now()->format('Y-m-d'),
+                ]);
+
+                sleep(5); // wait 5 seconds
+                
                 // Run the command for each model
                 \Artisan::call('ai:premarket', [
                     '--model_id' => $modelId,

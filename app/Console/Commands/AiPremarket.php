@@ -42,6 +42,7 @@ class AiPremarket extends Command
             try {
                 $this->info("Running pre-market plan for model {$model->id} ({$model->name}) on {$tradeDate}...");
 
+                /*
                 $marketData = app(\App\Services\MarketData::class);
                 //$universe = ['AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ']; // pick yours
 
@@ -63,6 +64,22 @@ class AiPremarket extends Command
                    $prices[$sym] = ['last' => $last_price];
 
                    
+                }
+                */
+
+                // Candidate symbols are produced by the server-side scanner (NO AI)
+                // Either precomputed into ai_daily_candidates, or fallback to scanning symbol_mappings.
+                $candidateLimit = (int) config('trading.scanner.candidate_limit', 25);
+                $scanner = app(\App\Services\Scanner\DailyCandidateScanner::class);
+                [$candidates, $scanMeta] = $scanner->scan($candidateLimit);
+
+                $marketData = app(\App\Services\MarketData::class);
+                $prices = [];
+                foreach ($candidates as $sym) {
+                    $p = $marketData->getPrice($sym);
+                    if ($p !== null) {
+                        $prices[$sym] = ['last' => (float) $p];
+                    }
                 }
 
                 // Build a lightweight state snapshot for planning
@@ -91,6 +108,8 @@ class AiPremarket extends Command
                     'equity'  => (float) ($model->equity ?? 0),
                     'open_positions' => $openPositions,
                     'prices' => $prices, // ✅ ADD THIS
+                    'candidates' => array_keys($prices),
+                    'scanner_meta' => $scanMeta,
                     'settings' => [
                         'max_strategies_per_day'        => $model->max_strategies_per_day,
                         'max_symbols_per_day'           => $model->max_symbols_per_day,
@@ -99,6 +118,7 @@ class AiPremarket extends Command
                     ],
                 ];
 
+                /*
                 $candidateLimit = (int) config('trading.scanner.candidate_limit', 20);
                 $scanner = app(\App\Services\Scanner\SymbolScanner::class);
                 $candidates = $scanner->candidates($candidateLimit);
@@ -115,7 +135,16 @@ class AiPremarket extends Command
 
 
                 \Log::info('Premarket candidates', ['candidates' => $state['candidates'] ?? []]);
+                */
 
+                $scanner = app(\App\Services\Scanner\UniverseCandidateScanner::class);
+                $candidates = $scanner->candidates(
+                    config('trading.scanner.candidate_limit', 25),
+                    config('saxo_universe.asset_types', ['Stock']),
+                    config('saxo_universe.exchange_ids', ['NASDAQ','NYSE'])
+                );
+                $state['candidates'] = $candidates;
+                
                 $stateJson = json_encode($state, JSON_PRETTY_PRINT);
 
 //                 $systemPrompt = <<<TXT

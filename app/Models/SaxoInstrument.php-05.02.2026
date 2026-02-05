@@ -2,29 +2,23 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class SaxoInstrument extends Model
 {
+    use HasFactory;
+
     protected $table = 'saxo_instruments';
 
     protected $fillable = [
         'uic',
-        'asset_type',
         'symbol',
         'description',
+        'asset_type',
         'exchange_id',
-        'currency_code',
-        'tradable_as',
         'is_tradable',
-        'raw',
-        'last_seen_at',
-    ];
-
-    protected $casts = [
-        'tradable_as' => 'array',
-        'raw'         => 'array',
-        'is_tradable' => 'boolean',
-        'last_seen_at'=> 'datetime',
+        'currency',
+        'raw_json',
     ];
 }
