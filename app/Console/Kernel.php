@@ -5,6 +5,7 @@ namespace App\Console;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use Storage;
+use Illuminate\Support\Facades\Log;
 
 use App\Models\AiModel;
 
@@ -81,6 +82,14 @@ class Kernel extends ConsoleKernel
         ->withoutOverlapping()          // prevents multiple runs at the same time
         //->runInBackground()             // runs the task in the background
         ->dailyAt('00:00');                      // schedules it to run daily
+
+        $schedule->call(function () {
+            try {
+                app(\App\Services\SaxoTokenService::class)->checkRefreshHealth();
+            } catch (\Throwable $e) {
+                Log::channel('saxo')->error('Saxo refresh health check failed: '.$e->getMessage());
+            }
+        })->everyFifteenMinutes();
     }
 
     /**

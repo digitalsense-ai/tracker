@@ -21,6 +21,9 @@ class AiTick extends Command
    protected $description = 'Runs one tick for all active AI trading models';
    public function handle()
    {
+//     $marketData = app(\App\Services\MarketData::class);
+//     $test_price = $marketData->getPrice('AAPL');
+// dd($test_price);
       $now = Carbon::now();
       
       $query = AiModel::where('active', true);
@@ -211,6 +214,7 @@ class AiTick extends Command
                         'sample_daily'     => array_slice($dailyPlan, 0, 3),
                         'open_positions_count' => count($openPositionsState),
                         'prices_keys' => array_keys($prices),
+                        'prices' => $prices,
                     ],
                 ]);
                 

@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Carbon;
 
 class SaxoTokenService
 {
-    private const CACHE_KEY   = 'saxo_access_token';
-    private const REFRESH_KEY = 'saxo_refresh_token';
+    private const DB_USER_KEY = 'user_id'; // optional, set if multi-user
 
     /**
      * Get a valid access token
@@ -21,40 +22,46 @@ class SaxoTokenService
      */
     public function getToken(string $authorizationCode = null): string
     {
-        // 1️⃣ If access token exists in cache, return it
-        if (Cache::has(self::CACHE_KEY)) {
-            return Cache::get(self::CACHE_KEY);
+        // 1️⃣ Try to get token from DB
+        $record = DB::table('saxo_tokens')
+            ->where(self::DB_USER_KEY, auth()->id() ?? null)
+            ->first();
+
+        if ($record) {
+            $accessToken = Crypt::decryptString($record->access_token ?? '');
+            $expiresAt = Carbon::parse($record->access_token_expires_at ?? now()->subMinute());
+
+            if ($expiresAt->isFuture()) {
+                return $accessToken; // still valid
+            }
+
+            // Token expired → try refresh
+            if (!empty($record->refresh_token)) {
+                try {
+                    return $this->refreshToken(Crypt::decryptString($record->refresh_token));
+                } catch (\Exception $e) {
+                    $this->clearToken();
+                    throw new \Exception(
+                        'Saxo refresh token invalid. Please visit /saxo/login to authorize your app.'
+                    );
+                }
+            }
         }
 
-        // 2️⃣ If authorization code provided, exchange it for token
+        // 2️⃣ If authorization code is provided, exchange it for token
         if ($authorizationCode) {
             return $this->exchangeCode($authorizationCode);
         }
 
-        // 3️⃣ Try refresh token if exists
-        $refreshToken = Cache::get(self::REFRESH_KEY);
-        if ($refreshToken) {
-            try {
-                //return $this->refreshToken($refreshToken);
-                return Cache::lock('saxo_token_refresh', 10)->block(5, function () use ($refreshToken) {
-                    return $this->refreshToken($refreshToken);
-                });
-
-            } catch (\Exception $e) {
-                // Refresh failed — clear tokens and log
-                $this->clearToken();
-                Log::channel('saxo')->warning('Refresh token failed. Cleared cached tokens. ' . $e->getMessage());
-                
-                // If authorization code is not provided, instruct user to re-login
-                throw new \Exception('Saxo refresh token invalid. Please visit /saxo/login to authorize your app.');
-            }
-        }
-
-        // 4️⃣ No token and no code → instruct first login
-        Log::channel('saxo')->warning('No Saxo token available. Visit /saxo/login to authorize.');
-        throw new \Exception('No Saxo token available. Please visit /saxo/login to authorize your app.');
+        // 3️⃣ No token and no code → require login
+        throw new \Exception(
+            'No Saxo token available. Please visit /saxo/login to authorize your app.'
+        );
     }
 
+    /**
+     * Exchange authorization code for access & refresh tokens
+     */
     public function exchangeCode(string $code): string
     {
         $response = Http::asForm()->post('https://sim.logonvalidation.net/token', [
@@ -71,15 +78,14 @@ class SaxoTokenService
 
         $data = $response->json();
 
-        Cache::put(self::CACHE_KEY, $data['access_token'], now()->addSeconds($data['expires_in'] - 60));
-        //Cache::put(self::REFRESH_KEY, $data['refresh_token']);
-        Cache::forever(self::REFRESH_KEY, $data['refresh_token']);
-
-        Log::channel('saxo')->info('Saxo token cached successfully');
+        $this->storeTokens($data['access_token'], $data['refresh_token'], $data['expires_in']);
 
         return $data['access_token'];
     }
 
+    /**
+     * Refresh the access token using refresh token
+     */
     private function refreshToken(string $refreshToken): string
     {
         $response = Http::asForm()->post('https://sim.logonvalidation.net/token', [
@@ -95,19 +101,72 @@ class SaxoTokenService
 
         $data = $response->json();
 
-        Cache::put(self::CACHE_KEY, $data['access_token'], now()->addSeconds($data['expires_in'] - 60));
-        //Cache::put(self::REFRESH_KEY, $data['refresh_token']);
-        Cache::forever(self::REFRESH_KEY, $data['refresh_token']);
+        $this->storeTokens($data['access_token'], $data['refresh_token'], $data['expires_in']);
 
         Log::channel('saxo')->info('Saxo token refreshed successfully');
 
         return $data['access_token'];
     }
 
+    /**
+     * Store access and refresh tokens in database securely
+     */
+    private function storeTokens(string $accessToken, string $refreshToken, int $expiresIn): void
+    {
+        DB::table('saxo_tokens')->updateOrInsert(
+            [self::DB_USER_KEY => auth()->id() ?? null],
+            [
+                'access_token' => Crypt::encryptString($accessToken),
+                'refresh_token' => Crypt::encryptString($refreshToken),
+                'access_token_expires_at' => now()->addSeconds($expiresIn - 30),
+                'last_refreshed_at' => now(),
+            ]
+        );
+
+        Log::channel('saxo')->info('Saxo tokens stored/updated in DB successfully');
+    }
+
+    /**
+     * Clear tokens from database
+     */
     public function clearToken(): void
     {
-        Cache::forget(self::CACHE_KEY);
-        Cache::forget(self::REFRESH_KEY);
-        Log::channel('saxo')->info('Saxo tokens cleared');
+        DB::table('saxo_tokens')->where(self::DB_USER_KEY, auth()->id() ?? null)->delete();
+        Log::channel('saxo')->info('Saxo tokens cleared from DB');
+    }
+
+    public function checkRefreshHealth(): void
+    {
+        $record = DB::table('saxo_tokens')->first();
+
+        if (!$record || empty($record->refresh_token)) {
+            Log::channel('saxo')->warning('Saxo refresh token missing');
+            return;
+        }
+
+        // If access token is still valid for a while, skip refresh
+        if ($record->access_token_expires_at &&
+            now()->diffInMinutes($record->access_token_expires_at, false) > 10) {
+            Log::channel('saxo')->info('Saxo refresh token assumed healthy (access token still valid)');
+            return;
+        }
+
+        try {
+            $this->refreshToken(
+                Crypt::decryptString($record->refresh_token)
+            );
+
+            Log::channel('saxo')->info('Saxo refresh token is alive');
+        } catch (\Exception $e) {
+            if (str_contains($e->getMessage(), 'invalid_grant')) {
+                Log::channel('saxo')->critical(
+                    'Saxo refresh token EXPIRED. Manual re-login required.'
+                );
+            } else {
+                Log::channel('saxo')->warning(
+                    'Transient error during Saxo refresh health check: '.$e->getMessage()
+                );
+            }
+        }
     }
 }
