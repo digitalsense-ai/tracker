@@ -339,6 +339,11 @@ ALLOWED ACTIONS:
 - "HOLD": keep all positions unchanged. When action is "HOLD", orders MUST be [].
 - "OPEN": open new positions according to daily_plan and current prices.
 - "CLOSE": close existing positions from open_positions.
+CONSTRAINT (MANDATORY):
+You may ONLY trade symbols that appear in:
+- state.open_positions, OR
+- approved strategies in state.daily_plan.
+You may NOT invent symbols or trade symbols outside the daily plan.
 OUTPUT FORMAT (STRICT):
 - Respond with PURE JSON only, no markdown, no commentary outside JSON.
 - Exact shape:

@@ -189,6 +189,11 @@ IMPORTANT:
 - active_on_open strategies must have entry_zone within ~0–3% of the current price (so they are realistically tradable today).
 - sleeper strategies may be further away, but must explain the trigger condition in entry_zone.
 - You may ONLY select symbols from state.candidates.
+CONSTRAINT (MANDATORY):
+You may ONLY create strategies for symbols listed in state.candidates.
+If a symbol is not present in state.candidates, it must be ignored completely.
+Do NOT invent symbols.
+Do NOT reuse symbols from memory or previous days.
 Each strategy MUST include:
 - entry_zone_low: number
 - entry_zone_high: number
