@@ -18,6 +18,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\ProfilesRecompute::class,
         \App\Console\Commands\BacktestSimulateCommand::class,
         \App\Console\Commands\AiTick::class,
+        \App\Console\Commands\ScanCandidates::class,
     ];
 
     /**

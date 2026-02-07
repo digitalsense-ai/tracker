@@ -6,7 +6,6 @@ use Illuminate\Console\Command;
 use Carbon\Carbon;
 use App\Models\AiModel;
 use App\Models\AiDailyCandidate;
-use App\Models\AiDailyCandidateItem;
 use App\Models\ModelLog;
 use App\Models\SaxoInstrument;
 use App\Services\Scanner\DailyCandidateScanner;
@@ -18,7 +17,7 @@ class ScanCandidates extends Command
 
     public function handle(): int
     {
-        logger()->channel('scanner')->info('scanner.start');
+        logger()->info('scanner.start');
 
         $marketData = app(\App\Services\MarketData::class);
 
@@ -34,53 +33,21 @@ class ScanCandidates extends Command
             ))
         )->map(fn ($s) => strtoupper($s));
 
+
         $tradeDate = $this->option('date')
             ? Carbon::parse($this->option('date'))->toDateString()
             : Carbon::today()->toDateString();
 
-        $modelId = $this->option('model_id');
-        if (!$modelId) {
-            $this->error('Missing required --model_id option');
-            return self::FAILURE;
-        }
-
-        $query = AiModel::query()->where('active', true);
-        if ($modelId) {
-            $query->where('id', (int) $modelId);
-        }  
-
-        $model = $query->get();
-        if ($model->isEmpty()) {
-            $this->info('No active AI models found.');
-            return self::SUCCESS;
-        }
-        
         /*
         |--------------------------------------------------------------------------
         | STEP 0 — Guard clause (freeze guarantee)
         |--------------------------------------------------------------------------
         */
-        $alreadyFrozen = AiDailyCandidate::where('trade_date', $tradeDate)
-            ->where('ai_model_id', $modelId)
-            ->whereJsonLength('symbols_json', '>', 0)
-            ->exists();
-
-        if ($alreadyFrozen) {
-            logger()->channel('scanner')->info('scanner.freeze.complete', [
-                'trade_date' => $tradeDate,
-                'ai_model_id' => $modelId,
-            ]);
-
+        if (AiDailyCandidate::where('trade_date', $tradeDate)->exists()) {
+            logger()->info('scanner.freeze.complete', ['trade_date' => $tradeDate]);
             $this->info("Scanner frozen — candidates already exist for {$tradeDate}");
             return self::SUCCESS;
         }
-
-
-        // if (AiDailyCandidate::where('trade_date', $tradeDate)->exists()) {
-        //     logger()->info('scanner.freeze.complete', ['trade_date' => $tradeDate]);
-        //     $this->info("Scanner frozen — candidates already exist for {$tradeDate}");
-        //     return self::SUCCESS;
-        // }
 
         $weights = config('trading.scanner.weights');
 
@@ -106,16 +73,17 @@ class ScanCandidates extends Command
 
         foreach ($universe as $instrument) {
 
-            // Original symbol
-            $rawSymbol = $instrument->symbol; // e.g. "NVDA:xnas"
-            // Take only the part before the colon
-            $symbol = strtoupper(strtok($rawSymbol, ':')); // -> "NVDA"
-
-            if (!$symbol) {
+            if (!$instrument->symbol) {
                 $this->reject('no_symbol', $instrument);
                 continue;
-            } 
-                       
+            }
+
+            if (!$instrument->enabled_for_ai) {
+                $this->reject('disabled', $instrument);
+                continue;
+            }
+
+            $symbol = strtoupper($instrument->symbol);           
             if ($allowSymbols->isNotEmpty() && !$allowSymbols->contains($symbol)) {
                 $this->reject('not_in_allowlist', $instrument);
                 continue;
@@ -126,30 +94,30 @@ class ScanCandidates extends Command
                 continue;
             }
 
-            $price = $marketData->getPrice($symbol);
+            $price = $marketData->getPrice($instrument->symbol);
 
             if (config('trading.scanner.require_price') && !$price) {
                 $this->reject('no_price', $instrument);
                 continue;
             }
 
-            // if ($price) {
-            //     if (
-            //         config('trading.scanner.min_price') !== null &&
-            //         $price < config('trading.scanner.min_price')
-            //     ) {
-            //         $this->reject('min_price', $instrument);
-            //         continue;
-            //     }
+            if ($price) {
+                if (
+                    config('trading.scanner.min_price') !== null &&
+                    $price < config('trading.scanner.min_price')
+                ) {
+                    $this->reject('min_price', $instrument);
+                    continue;
+                }
 
-            //     if (
-            //         config('trading.scanner.max_price') !== null &&
-            //         $price > config('trading.scanner.max_price')
-            //     ) {
-            //         $this->reject('max_price', $instrument);
-            //         continue;
-            //     }
-            // }
+                if (
+                    config('trading.scanner.max_price') !== null &&
+                    $price > config('trading.scanner.max_price')
+                ) {
+                    $this->reject('max_price', $instrument);
+                    continue;
+                }
+            }
             
             $tradableAs = is_array($instrument->tradable_as)
                             ? $instrument->tradable_as
@@ -166,8 +134,13 @@ class ScanCandidates extends Command
                 $this->reject('not_stock', $instrument);
                 continue;
             }
-            
-            $mapping = \App\Models\SymbolMapping::where('symbol', $symbol)->first();
+
+            // if (in_array($instrument->symbol, config('trading.scanner.denylist', []))) {
+            //     $this->reject('denylist', $instrument);
+            //     continue;
+            // }
+
+            $mapping = \App\Models\SymbolMapping::where('symbol', $instrument->symbol)->first();
 
             if (!$mapping) {
                 $this->reject('no_mapping', $instrument);
@@ -182,7 +155,7 @@ class ScanCandidates extends Command
             $priority = $mapping->priority ?? 999;
 
             $filtered->push((object) [
-                'symbol'     => $symbol,
+                'symbol'     => $instrument->symbol,
                 'uic'        => $instrument->uic,
                 'asset_type' => $instrument->asset_type,
                 'price'      => $price !== null ? (float)$price : null,
@@ -192,7 +165,7 @@ class ScanCandidates extends Command
         }
 
         $this->info("After filters: {$filtered->count()}");
-        logger()->channel('scanner')->info('scanner.filtered.count', ['count' => $filtered->count()]);
+        logger()->info('scanner.filtered.count', ['count' => $filtered->count()]);
 
         /*
         |--------------------------------------------------------------------------
@@ -269,14 +242,6 @@ class ScanCandidates extends Command
 
             $rangeScore = $todayRangePct / $median;
 
-            $candidate->metrics = [
-                'atr14'        => $atr14,
-                'atr_pct'      => $atrPct,
-                'momentum_20'  => $momentum,
-                'range_score'  => $rangeScore,
-                'median_range' => $median,
-            ];
-
             /*
             |--------------------------------------------------------------------------
             | STEP 6 — Final score (deterministic)
@@ -296,7 +261,7 @@ class ScanCandidates extends Command
         | STEP 7 — Rank & freeze
         |--------------------------------------------------------------------------
         */
-        logger()->channel('scanner')->info('scanner.rank.start');
+        logger()->info('scanner.rank.start');
         $ranked = $scored
             ->sortBy([
                 ['priority', 'asc'],
@@ -305,19 +270,17 @@ class ScanCandidates extends Command
             ])
             ->take(config('trading.scanner.candidate_limit'))
             ->values();
-        logger()->channel('scanner')->info('scanner.rank.complete', ['final_count' => $ranked->count()]);
+        logger()->info('scanner.rank.complete', ['final_count' => $ranked->count()]);
 
         foreach ($ranked as $i => $c) {
             AiDailyCandidateItem::create([
-                'ai_model_id' => $modelId,
                 'trade_date' => $tradeDate,
                 'symbol'     => $c->symbol,
                 'rank'       => $i + 1,
                 'price'      => $c->price,
                 'score'      => $c->score,
-                'saxo_uic'        => $c->uic,
-                'saxo_asset_type' => $c->asset_type,
-                'metrics_json'=> $c->metrics,
+                'uic'        => $c->uic,
+                'asset_type' => $c->asset_type,
                 'source'     => 'scanner_v4',
             ]);            
         }
@@ -326,7 +289,7 @@ class ScanCandidates extends Command
         $symbols = $ranked->sortBy('rank')->pluck('symbol');
 
         AiDailyCandidate::updateOrCreate(
-            ['ai_model_id' => $modelId, 'trade_date' => $tradeDate],
+            ['trade_date' => $tradeDate],
             [
                 'symbols_json' => $symbols,
                 'meta_json' => [
@@ -339,7 +302,6 @@ class ScanCandidates extends Command
         );
 
         ModelLog::create([
-            'ai_model_id' => $modelId,
             'action' => 'SCANNER_CANDIDATES',
             'payload' => [
                 'trade_date' => $tradeDate,
@@ -360,13 +322,8 @@ class ScanCandidates extends Command
 
     protected function reject(string $reason, SaxoInstrument $instrument): void
     {
-        // Original symbol
-        $rawSymbol = $instrument->symbol; // e.g. "NVDA:xnas"
-        // Take only the part before the colon
-        $symbol = strtoupper(strtok($rawSymbol, ':')); // -> "NVDA"
-
-        logger()->channel('scanner')->info("scanner.reject.{$reason}", [
-            'symbol' => $symbol,
+        logger()->info("scanner.reject.{$reason}", [
+            'symbol' => $instrument->symbol,
             'uic'    => $instrument->uic,
         ]);
     }

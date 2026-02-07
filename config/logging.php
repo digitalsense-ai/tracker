@@ -133,6 +133,12 @@ return [
             'level' => 'info',
         ],
 
+        'scanner' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/scanner.log'),
+            'level' => 'info',
+        ],
+
     ],
 
 ];

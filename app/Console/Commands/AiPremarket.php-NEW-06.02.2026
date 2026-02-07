@@ -1,0 +1,371 @@
+<?php
+
+namespace App\Console\Commands;
+
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
+use App\Models\AiModel;
+use App\Models\AiDailyPlan;
+use App\Models\ModelLog;
+use App\Models\Position;
+use Carbon\Carbon;
+
+class AiPremarket extends Command
+{
+    protected $signature = 'ai:premarket {--model_id=} {--date=}';
+    protected $description = 'Run pre-market planning for AI models and store daily strategy plans';
+
+    public function handle(): int
+    {
+        $modelId = $this->option('model_id');
+        $tradeDate = $this->option('date')
+            ? Carbon::parse($this->option('date'))->toDateString()
+            : Carbon::today()->toDateString();
+
+        $query = AiModel::query()->where('active', true);
+        if ($modelId) {
+            $query->where('id', (int) $modelId);
+        }
+
+        $models = $query->get();
+        if ($models->isEmpty()) {
+            $this->info('No active AI models found.');
+            return self::SUCCESS;
+        }
+
+        foreach ($models as $model) {
+            if (empty($model->premarket_prompt)) {
+                $this->info("Skipping model {$model->id} (no premarket_prompt set).");
+                continue;
+            }
+
+            try {
+                $this->info("Running pre-market plan for model {$model->id} ({$model->name}) on {$tradeDate}...");
+
+                /*
+                $marketData = app(\App\Services\MarketData::class);
+                //$universe = ['AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ']; // pick yours
+
+                $universe = app(\App\Services\SymbolUniverse::class)->candidates(
+                   $model->symbol_limit ?? 20
+                );
+                $this->info("Pre-market symbols: " . count($universe));
+
+                $prices = [];
+                foreach ($universe as $sym) {
+                    $last_price = (float) $marketData->getPrice($sym);
+
+                    $this->info("Pre-market price for symbol {$sym} - {$last_price}");
+                    
+                    if ($last_price <= 0) {
+                        continue; // ❗ drop symbol entirely
+                    }
+
+                   $prices[$sym] = ['last' => $last_price];
+
+                   
+                }
+                */
+
+                /*
+                // Candidate symbols are produced by the server-side scanner (NO AI)
+                // Either precomputed into ai_daily_candidates, or fallback to scanning symbol_mappings.
+                $candidateLimit = (int) config('trading.scanner.candidate_limit', 25);
+                $scanner = app(\App\Services\Scanner\DailyCandidateScanner::class);
+                [$candidates, $scanMeta] = $scanner->scan($candidateLimit);
+
+                $marketData = app(\App\Services\MarketData::class);
+                $prices = [];
+                foreach ($candidates as $sym) {
+                    $p = $marketData->getPrice($sym);
+                    if ($p !== null) {
+                        $prices[$sym] = ['last' => (float) $p];
+                    }
+                }
+                */
+
+                $candidates = AiDailyCandidate::forToday();
+
+                if ($candidates->isEmpty()) {
+                    Log::critical('Scanner returned no symbols for today – AI run aborted.');
+                    return; // HARD FAIL: do not run AI
+                }
+
+                // Filter candidates based on data validation
+                $validCandidates = $candidates->filter(function($symbol) use ($marketData) {
+                    try {
+                        $price = $marketData->getPrice($symbol);
+                        $bars  = $marketData->getHistoricalBars($symbol, '1d', 14);
+                        $atr   = calculateATR($bars);
+
+                        if (!$price) return false;       // NO PRICE → reject
+                        if (!$bars || count($bars) === 0) return false; // NO BARS → reject
+                        if ($atr === null || $atr <= 0) return false;   // INVALID ATR → reject
+
+                        return true; // symbol is valid
+                    } catch (\SaxoApiException $e) {
+                        Log::error("Saxo API error for symbol {$symbol}: ".$e->getMessage());
+                        return false; // skip but do not halt scanning
+                    }
+                });
+
+                if ($validCandidates->isEmpty()) {
+                    Log::critical('No valid candidates remain after filtering – AI run aborted.');
+                    return; // HARD FAIL
+                }
+
+                // Build a lightweight state snapshot for planning
+                $openPositions = Position::where('ai_model_id', $model->id)
+                    ->where('status', 'open')
+                    ->get()
+                    ->map(function (Position $p) {
+                        return [
+                            'ticker'      => $p->ticker,
+                            'side'        => $p->side,
+                            'qty'         => $p->qty,
+                            'avg_price'   => $p->avg_price,
+                            'stop_price'  => $p->stop_price,
+                            'target_price'=> $p->target_price,
+                            'leverage'    => $p->leverage,
+                            'margin'      => $p->margin,
+                            'unrealized_pnl' => $p->unrealized_pnl,
+                        ];
+                    })
+                    ->values()
+                    ->toArray();
+
+                $state = [
+                    'date'    => $tradeDate,
+                    'time'    => Carbon::now()->toIso8601String(),
+                    'equity'  => (float) ($model->equity ?? 0),
+                    'open_positions' => $openPositions,
+                    'prices' => $prices, // ✅ ADD THIS
+                    'candidates' => array_keys($prices),
+                    'scanner_meta' => $scanMeta,
+                    'settings' => [
+                        'max_strategies_per_day'        => $model->max_strategies_per_day,
+                        'max_symbols_per_day'           => $model->max_symbols_per_day,
+                        'allow_sleeper_strategies'      => $model->allow_sleeper_strategies,
+                        'default_risk_per_strategy_pct' => $model->default_risk_per_strategy_pct,
+                    ],
+                ];
+
+                /*
+                $candidateLimit = (int) config('trading.scanner.candidate_limit', 20);
+                $scanner = app(\App\Services\Scanner\SymbolScanner::class);
+                $candidates = $scanner->candidates($candidateLimit);
+                //$state['candidates'] = $candidates;
+                // Only keep candidates that have valid prices
+                $state['candidates'] = array_values(array_intersect(
+                    $candidates,
+                    array_keys($prices)
+                ));
+
+                \Log::info('Premarket usable symbols', [
+                    'symbols' => array_keys($prices),
+                ]);
+
+
+                \Log::info('Premarket candidates', ['candidates' => $state['candidates'] ?? []]);
+                */
+
+                $scanner = app(\App\Services\Scanner\UniverseCandidateScanner::class);
+                $candidates = $scanner->candidates(
+                    config('trading.scanner.candidate_limit', 25),
+                    config('saxo_universe.asset_types', ['Stock']),
+                    config('saxo_universe.exchange_ids', ['NASDAQ','NYSE'])
+                );
+                $state['candidates'] = $candidates;
+                
+                $stateJson = json_encode($state, JSON_PRETTY_PRINT);
+
+//                 $systemPrompt = <<<TXT
+// You are a pre-market strategist for a leveraged equity/crypto account.
+
+// Your job is to build a DAILY TRADING PLAYBOOK for the upcoming session only.
+
+// Hard rules:
+// - You are planning for the model with id={$model->id} and name="{$model->name}".
+// - Use the risk and configuration fields from the JSON state when sizing strategies.
+// - Do NOT open trades or manage positions yourself, only propose a plan.
+// - Output MUST be STRICT JSON (no markdown, no commentary outside JSON).
+
+// The user state JSON will include:
+// - current equity
+// - any open positions (if they exist)
+// - planning and risk settings
+// TXT;
+
+                $systemPrompt = <<<TXT
+You are the pre-market planner for an autonomous trading model.  
+You output a single JSON array called daily_plan, following the structure already defined in the PHP code.
+Your tasks:
+- Generate a small set of high-quality strategies for TODAY only based on the provided state JSON.
+- Each strategy must follow the exact schema required (symbol, direction, type, mode, entry_zone, stop_loss, take_profit, invalid_level, max_size_usd, priority, notes).
+- You do not execute trades; you only design the plan for later agents.
+Use from state:
+- equity, open_positions, settings (max_strategies_per_day, max_symbols_per_day, default_risk_per_strategy_pct, allow_sleeper_strategies).
+Rules:
+- Focus on a few strong ideas in liquid symbols. Avoid noise.
+- Never exceed the allowed number of strategies or symbols.
+- Every strategy needs clear risk parameters: stop_loss, take_profit, invalid_level.
+- Size each strategy using equity × default_risk_per_strategy_pct unless the plan suggests smaller size.
+- For open_positions: either continue the thesis (“manage only”) or mark as low priority if the edge is weak.
+Modes:
+- active_on_open → idea is tradable at/near the open if price is inside/near entry_zone.
+- sleeper → only valid later if price reaches confirmation levels.
+IMPORTANT:
+- The state includes a "prices" map of current market prices.
+- For each strategy you propose, you MUST anchor entry_zone, stop_loss, take_profit, invalid_level around the current price of that symbol.
+- If you do not have a price for a symbol, do NOT include that symbol in the plan.
+- active_on_open strategies must have entry_zone within ~0–3% of the current price (so they are realistically tradable today).
+- sleeper strategies may be further away, but must explain the trigger condition in entry_zone.
+- You may ONLY select symbols from state.candidates.
+CONSTRAINT (MANDATORY):
+You may ONLY create strategies for symbols listed in state.candidates.
+If a symbol is not present in state.candidates, it must be ignored completely.
+Do NOT invent symbols.
+Do NOT reuse symbols from memory or previous days.
+Each strategy MUST include:
+- entry_zone_low: number
+- entry_zone_high: number
+And entry_zone should be a readable string like "185-188".
+Output:
+- Only the JSON array daily_plan.
+- No extra commentary outside the array.
+TXT;
+
+            $premarketPrompt = '';
+            if($model->premarket_prompt_status)
+                $premarketPrompt = $model->premarket_prompt ?? '';
+
+                $userPrompt = <<<TXT
+Here is the current planning state as JSON:
+{$stateJson}
+
+Using this information, and the planning instructions below, build a DAILY STRATEGY PLAN for today:
+
+{$premarketPrompt}
+
+Your response must be a JSON ARRAY of strategy objects. Each object MUST have at least:
+
+- "symbol": string (e.g. "TSLA")
+- "direction": "long" | "short"
+- "type": string description (e.g. "trend_follow", "mean_reversion", "distribution_short", "carry_trade")
+- "mode": "active_on_open" | "sleeper"
+- "entry_zone": string describing price range or condition (e.g. "400-405" or "above 415 on strong momentum")
+- "entry_zone_low": number
+- "entry_zone_high": number
+- "stop_loss": number (approx stop level)
+- "take_profit": number (approx target level)
+- "invalid_level": number (where the thesis is clearly wrong)
+- "max_size_usd": number (maximum notional allocation for this strategy)
+- "priority": integer (1 = highest)
+- "notes": short string (<= 3 sentences explaining the idea)
+
+Respect, as soft caps:
+- max_strategies_per_day
+- max_symbols_per_day
+
+Do NOT include any other top-level fields. Return ONLY the JSON array.
+TXT;
+
+                $apiKey = config('services.openai.key');
+                if (!$apiKey) {
+                    throw new \RuntimeException('Missing OpenAI API key in services.openai.key');
+                }
+
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Content-Type'  => 'application/json',
+                ])->post('https://api.openai.com/v1/responses', [
+                    'model'  => config('services.openai.model', 'gpt-4.1-mini'),
+                    'input'  => [
+                        // ['role' => 'system', 'content' => $systemPrompt],
+                        // ['role' => 'user',   'content' => $userPrompt],
+
+                        [
+                           'role'    => 'system',
+                           'content' => [
+                               [
+                                   'type' => 'input_text',
+                                   'text' => $systemPrompt,
+                               ],
+                           ],
+                       ],
+                       [
+                           'role'    => 'user',
+                           'content' => [
+                               [
+                                   'type' => 'input_text',
+                                   'text' => $userPrompt,
+                               ],
+                           ],
+                       ],
+                    ],
+                    'max_output_tokens' => 2048,
+                ]);
+
+                if (!$response->successful()) {
+                    throw new \RuntimeException('OpenAI API error: ' . $response->body());
+                }
+
+                $body = $response->json();
+                //$outputText = $body['output'][0]['content'][0]['text'] ?? null;
+                $outputText = '';
+                if (!empty($body['output'][0]['content'])) {
+                   foreach ($body['output'][0]['content'] as $chunk) {
+                       if (($chunk['type'] ?? null) === 'output_text') {
+                           $outputText .= $chunk['text'] ?? '';
+                       }
+                   }
+                }
+                $outputText = trim($outputText);
+                if (!$outputText) {
+                    throw new \RuntimeException('No output text from pre-market model.');
+                }
+
+                $plan = json_decode($outputText, true);
+                if (!is_array($plan)) {
+                    throw new \RuntimeException('Pre-market model did not return valid JSON array.');
+                }
+
+                $dailyPlan = AiDailyPlan::updateOrCreate(
+                    [
+                        'ai_model_id' => $model->id,
+                        'trade_date'  => $tradeDate,
+                    ],
+                    [
+                        'plan_json' => $plan,
+                    ]
+                );
+
+                ModelLog::create([
+                    'ai_model_id' => $model->id,
+                    'action'      => 'PREMARKET_PLAN',
+                    'payload'     => [
+                        'date'     => $tradeDate,
+                        'state'    => $state,
+                        'plan'     => $plan,
+                        'raw_text' => $outputText,
+                        'dailyPlan' => $dailyPlan,
+                    ],
+                ]);
+
+                $this->info("Stored pre-market plan id={$dailyPlan->id} for model {$model->id} on {$tradeDate}.");
+            } catch (\Throwable $e) {
+                $this->error("Error in pre-market for model {$model->id}: " . $e->getMessage());
+                ModelLog::create([
+                    'ai_model_id' => $model->id,
+                    'action'      => 'PREMARKET_ERROR',
+                    'payload'     => [
+                        'error' => $e->getMessage(),
+                    ],
+                ]);
+                continue;
+            }
+        }
+
+        return self::SUCCESS;
+    }
+}
