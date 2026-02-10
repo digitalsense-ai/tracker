@@ -70,7 +70,7 @@
     @csrf
     <input type="hidden" name="date" value="{{ $date }}">
 
-    <section class="grid" style="grid-template-columns:repeat(4, minmax(0, 1fr));gap:16px">
+    <section class="kanban-grid">  <!-- style="grid-template-columns:repeat(4, minmax(0, 1fr));gap:16px" -->
 
       {{-- Column 1: Idea Pool --}}
       <div class="card">
@@ -276,6 +276,8 @@
                   {{ $p >= 0 ? '+' : '' }}${{ number_format($p,2) }}
                 </span>
               </div>
+
+              <div class="small">Reason: <span class="bold">{{ $t->exit_reason_code }}</span><br>{{ $t->exit_reason_text }}</div>
             </article>
           @empty
             <div class="small">No closed trades yet.</div>

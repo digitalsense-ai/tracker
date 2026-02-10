@@ -160,7 +160,7 @@ class PaperBroker
            if ($action === 'OPEN') {
                $this->openPosition($model, $symbol, $side, $qty);
            } elseif ($action === 'CLOSE') {
-               $this->closePositionBySymbol($model, $symbol);
+               $this->closePositionBySymbol($model, $symbol, $decision);
            }
        }
        $this->recalculateEquity($model);
@@ -288,7 +288,7 @@ class PaperBroker
                   $targetPrice = $plan['take_profit'];
               }
           }
-          
+
            // Create brand new position
            $position               = new Position();
            $position->ai_model_id  = $model->id;
@@ -331,7 +331,7 @@ class PaperBroker
        $trade->save();
     }
 
-   protected function closePositionBySymbol(AiModel $model, string $symbol): void
+   protected function closePositionBySymbol(AiModel $model, string $symbol, array $decision = []): void
    {
        $position = Position::where('ai_model_id', $model->id)
            ->where('ticker', $symbol)
@@ -342,6 +342,27 @@ class PaperBroker
        }
        //$exitPrice = (float) $this->marketData->getPrice($symbol);
        $marketData = app(\App\Services\MarketData::class);       
+
+      // Map of standardized exit reason codes
+      $exitReasonMap = [
+          'stop_loss'    => ['stop loss', 'fell below stop'],
+          'take_profit'  => ['take profit', 'reached target'],
+          'manual_close' => ['manual', 'user closed'],
+          'market_cond'  => ['market condition', 'volatility'],
+      ];
+
+      // Determine code from reasoning
+      $reasonText = $decision['reasoning'] ?? '';
+      $reasonCode = null;
+
+      foreach ($exitReasonMap as $code => $keywords) {
+          foreach ($keywords as $keyword) {
+              if (stripos($reasonText, $keyword) !== false) {
+                  $reasonCode = strtoupper($code); // e.g., STOP_LOSS
+                  break 2;
+              }
+          }
+      }
 
        // Close any open trades for that symbol as well
        $openTrades = Trade::where('ai_model_id', $model->id)
@@ -370,7 +391,9 @@ class PaperBroker
            );
            $trade->exit_price = $exitPrice;
            $trade->notional_exit  = $trade->qty * $exitPrice; 
-           $trade->net_pnl    = $netPnl;           
+           $trade->net_pnl    = $netPnl;    
+           $trade->exit_reason_code    = $reasonCode;
+           $trade->exit_reason_text    = $reasonText;
            $trade->closed_at  = now();
            $trade->save();
        }
