@@ -81,12 +81,12 @@ class Kernel extends ConsoleKernel
 
                 sleep(5); // wait 5 seconds
 
-                // Run the command for v2
-                \Artisan::call('ai:premarket-v2', [
-                    '--model_id' => $modelId,                  
-                ]);
+                // // Run the command for v2
+                // \Artisan::call('ai:premarket-v2', [
+                //     '--model_id' => $modelId,                  
+                // ]);
 
-                sleep(5); // optional: pause before next model
+                // sleep(5); // optional: pause before next model
             }
         })
         ->name('ai-premarket-daily')   // required for withoutOverlapping

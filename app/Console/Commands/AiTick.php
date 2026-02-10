@@ -174,7 +174,15 @@ class AiTick extends Command
                            $dailyPlan[] = $s;
                        }
                    }
-                }               
+                }  
+
+                // Allowed symbols = open positions OR approved daily plan
+                $allowedSymbols = collect($openPositionsState)->pluck('symbol')
+                    ->merge(collect($dailyPlan)->pluck('symbol'))
+                    ->map(fn ($s) => strtoupper($s))
+                    ->unique()
+                    ->values()
+                    ->all();             
 
                 // Attach current prices for any relevant symbols (open positions + plan)
                 $prices = [];
@@ -235,6 +243,7 @@ class AiTick extends Command
                    'prices'           => $prices,
                    'daily_plan'       => $dailyPlan,
                    'full_plan'        => $fullPlan,
+                   'allowed_symbols' => $allowedSymbols,
                ];
 
                // // Attach current prices for symbols (if available)
@@ -339,11 +348,10 @@ ALLOWED ACTIONS:
 - "HOLD": keep all positions unchanged. When action is "HOLD", orders MUST be [].
 - "OPEN": open new positions according to daily_plan and current prices.
 - "CLOSE": close existing positions from open_positions.
-CONSTRAINT (MANDATORY):
-You may ONLY trade symbols that appear in:
-- state.open_positions, OR
-- approved strategies in state.daily_plan.
-You may NOT invent symbols or trade symbols outside the daily plan.
+MANDATORY CONSTRAINT:
+You may ONLY place orders for symbols listed in state.allowed_symbols.
+Never invent symbols.
+If an order symbol is not in state.allowed_symbols, return HOLD with orders [].
 OUTPUT FORMAT (STRICT):
 - Respond with PURE JSON only, no markdown, no commentary outside JSON.
 - Exact shape:

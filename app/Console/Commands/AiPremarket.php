@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use App\Models\AiModel;
 use App\Models\AiDailyPlan;
+use App\Models\AiDailyCandidate;
 use App\Models\ModelLog;
 use App\Models\Position;
 use Carbon\Carbon;
@@ -137,6 +138,7 @@ class AiPremarket extends Command
                 \Log::info('Premarket candidates', ['candidates' => $state['candidates'] ?? []]);
                 */
 
+                /*
                 $scanner = app(\App\Services\Scanner\UniverseCandidateScanner::class);
                 $candidates = $scanner->candidates(
                     config('trading.scanner.candidate_limit', 25),
@@ -144,8 +146,20 @@ class AiPremarket extends Command
                     config('saxo_universe.exchange_ids', ['NASDAQ','NYSE'])
                 );
                 $state['candidates'] = $candidates;
+                */
+
+                $candidatesRow = AiDailyCandidate::where('ai_model_id',$modelId)
+									 ->where('trade_date',$tradeDate)
+									 ->first();
+				$candidates = $candidatesRow ? $candidatesRow->symbols_json : [];
+				$state['candidates'] = $candidates;
                 
                 $stateJson = json_encode($state, JSON_PRETTY_PRINT);
+
+                $candidateSet = array_fill_keys(
+				    array_map('strtoupper', $state['candidates']),
+				    true
+				);
 
 //                 $systemPrompt = <<<TXT
 // You are a pre-market strategist for a leveraged equity/crypto account.
@@ -189,11 +203,10 @@ IMPORTANT:
 - active_on_open strategies must have entry_zone within ~0–3% of the current price (so they are realistically tradable today).
 - sleeper strategies may be further away, but must explain the trigger condition in entry_zone.
 - You may ONLY select symbols from state.candidates.
-CONSTRAINT (MANDATORY):
+MANDATORY CONSTRAINT:
 You may ONLY create strategies for symbols listed in state.candidates.
-If a symbol is not present in state.candidates, it must be ignored completely.
-Do NOT invent symbols.
-Do NOT reuse symbols from memory or previous days.
+If a symbol is not present in state.candidates, ignore it completely.
+Do NOT invent symbols. Do NOT reuse symbols from previous days.
 Each strategy MUST include:
 - entry_zone_low: number
 - entry_zone_high: number
@@ -298,6 +311,38 @@ TXT;
                     throw new \RuntimeException('Pre-market model did not return valid JSON array.');
                 }
 
+                // Validation
+                $validatedPlan = [];
+				foreach ($plan as $idx => $strategy) {
+				    $symbol = strtoupper($strategy['symbol'] ?? '');
+
+				    if (!isset($candidateSet[$symbol])) {
+				        // Reject + log
+				        ModelLog::create([
+				            'ai_model_id' => $model->id,
+				            'action'      => 'premarket.reject.symbol_outside_candidates',
+				            'payload'     => [
+				                'trade_date' => $tradeDate,
+				                'symbol'     => $symbol,
+				                'candidates' => $state['candidates'],
+				                'strategy'   => $strategy,
+				                'index'      => $idx,
+				            ],
+				        ]);
+
+				        continue; // discard strategy
+				    }
+
+				    $validatedPlan[] = $strategy;
+				}
+
+				$plan = array_values($validatedPlan); // reindex
+				if (empty($plan)) {
+				    throw new \RuntimeException(
+				        'All strategies rejected: symbols outside candidate set.'
+				    );
+				}
+
                 $dailyPlan = AiDailyPlan::updateOrCreate(
                     [
                         'ai_model_id' => $model->id,
@@ -335,5 +380,18 @@ TXT;
         }
 
         return self::SUCCESS;
+    }
+
+    protected function reject(string $reason, SaxoInstrument $instrument): void
+    {
+        // Original symbol
+        $rawSymbol = $instrument->symbol; // e.g. "NVDA:xnas"
+        // Take only the part before the colon
+        $symbol = strtoupper(strtok($rawSymbol, ':')); // -> "NVDA"
+
+        logger()->channel('scanner')->info("scanner.reject.{$reason}", [
+            'symbol' => $symbol,
+            'uic'    => $instrument->uic,
+        ]);
     }
 }

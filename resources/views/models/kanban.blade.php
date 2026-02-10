@@ -31,7 +31,7 @@
     <a href="{{ route('models.prompt', [$model->slug, 3]) }}">Loop / Check Prompt</a>
 
     <a href="{{ route('models.kanban', [$model->slug, 'date' => now()->toDateString()]) }}" class="active">Kanban</a>
-    <a href="{{ route('models.kanban.v2', [$model->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>
+    {{--<a href="{{ route('models.kanban.v2', [$model->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>--}}
   </div>
 
   <section class="card" style="padding:16px;margin-bottom:16px">
@@ -244,7 +244,25 @@
               <div class="small">Exit Price: <span class="bold">{{ number_format($t->exit_price,4) }}</span></div>
 
               <div class="small">Quantity: <span class="bold">{{ number_format($t->qty,4) }}</span></div>
-              <div class="small">Holding Time: <span class="bold">{{ $t->holding_seconds ?? 0 }}s</span></div>
+              @php                  
+                  $holdingTime = \Carbon\Carbon::parse($t->opened_at)->diffInSeconds($t->closed_at);
+                  $hours = floor($holdingTime / 3600);
+                  $minutes = floor(($holdingTime % 3600) / 60);
+                  $seconds = $holdingTime % 60;
+              @endphp
+              <div class="small">Holding Time: <span class="bold">
+                @if($hours)
+                    {{ $hours }}h
+                @endif
+
+                @if($minutes)
+                    {{ $minutes }}m
+                @endif
+
+                @if($seconds)
+                    {{ $seconds }}s
+                @endif
+              </span></div>
 
               <div class="small">Notional (Entry): <span class="bold">${{ number_format($t->notional_entry ?? 0,2) }}</span></div>
               <div class="small">Notional (Exit): <span class="bold">${{ ($t->notional_exit == 0) ? (number_format(($t->qty * $t->exit_price) ?? 0,2)) : (number_format($t->notional_exit ?? 0,2)) }}</span></div>

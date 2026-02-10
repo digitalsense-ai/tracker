@@ -6,6 +6,8 @@ use App\Models\AiModel;
 use App\Models\Position;
 use App\Models\Trade;
 use App\Models\StrategyProfile;
+use App\Models\AiDailyPlan;
+use App\Models\ModelLog;
 
 use Carbon\Carbon;
 use App\Services\PriceFeed\PriceFeedInterface;
@@ -72,7 +74,7 @@ class PaperBroker
         $pos = Position::where('ai_model_id', $model->id)->where('ticker', $ticker)->where('status', 'open')->first();
         if (!$pos) return ['ok'=>false,'error'=>'no position'];
 
-        $price = (float)($o['exit'] ?? $o['price'] ?? 0);
+        $price = (float)($o['exit'] ?? $o['price'] ?? null);
         if ($price <= 0) $price = $this->feed->last($ticker) ?? 100.0;
 
         $notionalExit = $pos->qty * $price;
@@ -113,6 +115,9 @@ class PaperBroker
        // Normalise top-level action
        $action = strtoupper($decision['action'] ?? 'HOLD');
        $orders = $decision['orders'] ?? [];
+
+       $allowed = $this->getAllowedSymbols($model);
+
        if (!in_array($action, ['OPEN', 'CLOSE'])) {
            // HOLD (or anything else): no structural changes, just keep equity as is
            $this->recalculateEquity($model);
@@ -121,6 +126,21 @@ class PaperBroker
        foreach ($orders as $order) {
            // Support either `symbol` or `ticker` from the AI
            $symbol = strtoupper($order['symbol'] ?? $order['ticker'] ?? '');
+
+           if (!$symbol || !in_array($symbol, $allowed, true)) {
+              ModelLog::create([
+                  'ai_model_id' => $model->id,
+                  'action'      => 'ORDER_REJECTED',
+                  'payload'     => [
+                      'reason'  => 'symbol_not_allowed',
+                      'symbol'  => $symbol,
+                      'order'   => $order,
+                      'allowed' => $allowed,
+                  ],
+              ]);
+              continue; // 🔒 HARD STOP — skip execution
+          }
+    
            // Normalise side into our DB enum: 'long' / 'short'
            $rawSide = strtolower($order['side'] ?? $order['direction'] ?? 'long');
            if ($rawSide === 'buy') {
@@ -197,9 +217,16 @@ class PaperBroker
        float $qty,
        ?float $stopPrice = null,
        ?float $targetPrice = null
-    ): void {
+    ): void {   
        $marketData = app(\App\Services\MarketData::class);
        $price      = (float) $marketData->getPrice($symbol);
+
+       ModelLog::create([
+        'ai_model_id' => $model->id,
+        'action' => 'OPEN_POSITION_PRICE',
+        'payload' => ['symbol' => $symbol, 'price' => $price],
+      ]);
+
        if ($price <= 0) {
            return;
        }
@@ -208,7 +235,8 @@ class PaperBroker
            ->where('ticker', $symbol)
            ->where('status', 'open')
            ->first();
-       if ($position) {
+       if ($position) {          
+
            // ADD to existing position
            $oldQty   = (float)$position->qty;
            $newQty   = $oldQty + $qty;
@@ -228,6 +256,39 @@ class PaperBroker
            }
            $position->save();
        } else {
+          $planJson = AiDailyPlan::where('ai_model_id', $model->id)
+              ->orderByDesc('trade_date')
+              ->value('plan_json');
+
+          ModelLog::create([
+            'ai_model_id' => $model->id,
+            'action' => 'PLAN_JSON_ON_OPEN',
+            'payload' => [],
+          ]);
+
+          if ($planJson) {
+              $plans = json_decode($planJson, true);
+
+              $plan = collect($plans)->firstWhere('symbol', $symbol);
+
+              ModelLog::create([
+                'ai_model_id' => $model->id,
+                'action' => 'PLAN_JSON_ON_OPEN_VALUES',
+                'payload' => ['plan' => $plan],
+              ]);
+
+              if ($plan) {
+                  ModelLog::create([
+                    'ai_model_id' => $model->id,
+                    'action' => 'PLAN_JSON_ON_OPEN_SL_TP',
+                    'payload' => ['stop_loss' => $plan['stop_loss'], 'take_profit' => $plan['take_profit']],
+                  ]);
+
+                  $stopPrice   = $plan['stop_loss'];
+                  $targetPrice = $plan['take_profit'];
+              }
+          }
+          
            // Create brand new position
            $position               = new Position();
            $position->ai_model_id  = $model->id;
@@ -251,7 +312,7 @@ class PaperBroker
        $trade->opened_at      = now();
        $trade->notional_entry = $price * $qty;
        $trade->fees           = 0;
-       $trade->net_pnl        = 0;
+       $trade->net_pnl        = null;
        //$trade->closed_at      = Carbon::now();
 
        $trade->date = Carbon::now()->toDateString(); // e.g. "2025-12-09"
@@ -263,8 +324,8 @@ class PaperBroker
       }
 
       // ✅ NEW: required by DB: exit_price (and likely companions)
-      $trade->exit_price     = 0;          // placeholder for open trades
-      $trade->notional_exit  = 0;          // no exit yet      
+      $trade->exit_price     = null;          // placeholder for open trades
+      $trade->notional_exit  = null;          // no exit yet      
       $trade->stop_loss     = 0;
 
        $trade->save();
@@ -280,8 +341,7 @@ class PaperBroker
            return;
        }
        //$exitPrice = (float) $this->marketData->getPrice($symbol);
-       $marketData = app(\App\Services\MarketData::class);
-       $exitPrice      = (float) $marketData->getPrice($symbol);
+       $marketData = app(\App\Services\MarketData::class);       
 
        // Close any open trades for that symbol as well
        $openTrades = Trade::where('ai_model_id', $model->id)
@@ -290,6 +350,18 @@ class PaperBroker
                        ->whereNull('closed_at')
                        ->get();
        foreach ($openTrades as $trade) {
+
+          $exitPrice      = (float) $marketData->getPrice($symbol);
+          if ($exitPrice === null || $exitPrice <= 0) {
+            // Do NOT close if you cannot price it
+            ModelLog::create([
+              'ai_model_id' => $model->id,
+              'action' => 'CLOSE_BLOCKED',
+              'payload' => ['symbol'=>$symbol, 'reason'=>'no_exit_price'],
+            ]);
+            continue;
+          }
+
            $netPnl = $this->calculateNetPnl(
                $trade->side,
                $trade->qty,
@@ -355,9 +427,40 @@ class PaperBroker
     $stop   = isset($order['stop'])   ? (float)$order['stop']   : null;
     $target = isset($order['target']) ? (float)$order['target'] : null;
     if (!$symbol || $qty <= 0) {
-      return;
+    return;
     }
     // DO NOT block on existing position anymore – we allow adds now.
     $this->openPosition($model, $symbol, $side, $qty, $stop, $target);
+  }
+
+  protected function getAllowedSymbols(AiModel $model): array
+  {
+      // Open positions
+      $open = Position::where('ai_model_id', $model->id)
+          ->where('status', 'open')
+          ->pluck('ticker');
+
+      // Approved daily plan symbols (latest plan)
+      $plan = AiDailyPlan::where('ai_model_id', $model->id)
+          ->orderByDesc('trade_date')
+          ->value('plan_json');
+
+      $approved = collect($plan ?? [])
+          ->filter(fn ($s) =>
+              is_array($s) &&
+              (
+                  (!empty($s['approved']) && $s['approved']) ||
+                  (($s['status'] ?? null) === 'approved') ||
+                  (!empty($s['keep']))
+              )
+          )
+          ->pluck('symbol');
+
+      return $open
+          ->merge($approved)
+          ->map(fn ($s) => strtoupper($s))
+          ->unique()
+          ->values()
+          ->all();
   }
 }

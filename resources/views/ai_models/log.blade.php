@@ -22,7 +22,7 @@
   <a href="{{ route('models.prompt', [$m->slug, 3]) }}">Loop / Check Prompt</a>
 
   <a href="{{ route('models.kanban', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban</a>
-  <a href="{{ route('models.kanban.v2', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>
+  {{--<a href="{{ route('models.kanban.v2', [$m->slug, 'date' => now()->toDateString()]) }}">Kanban v2</a>--}}
 </div>
 
 <div class="card">

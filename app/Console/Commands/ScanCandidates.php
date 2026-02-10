@@ -49,8 +49,8 @@ class ScanCandidates extends Command
             $query->where('id', (int) $modelId);
         }  
 
-        $model = $query->get();
-        if ($model->isEmpty()) {
+        $model = $query->first();        
+        if (!$model) {
             $this->info('No active AI models found.');
             return self::SUCCESS;
         }
@@ -128,29 +128,18 @@ class ScanCandidates extends Command
 
             $price = $marketData->getPrice($symbol);
 
-            if (config('trading.scanner.require_price') && !$price) {
+            if (config('trading.scanner.require_price') && ($price === null || $price <= 0)) {
                 $this->reject('no_price', $instrument);
                 continue;
             }
-
-            // if ($price) {
-            //     if (
-            //         config('trading.scanner.min_price') !== null &&
-            //         $price < config('trading.scanner.min_price')
-            //     ) {
-            //         $this->reject('min_price', $instrument);
-            //         continue;
-            //     }
-
-            //     if (
-            //         config('trading.scanner.max_price') !== null &&
-            //         $price > config('trading.scanner.max_price')
-            //     ) {
-            //         $this->reject('max_price', $instrument);
-            //         continue;
-            //     }
-            // }
             
+            if ($price !== null) {
+               $min = config('trading.scanner.min_price');
+               $max = config('trading.scanner.max_price');
+               if ($min !== null && $price < $min) { $this->reject('min_price', $instrument); continue; }
+               if ($max !== null && $price > $max) { $this->reject('max_price', $instrument); continue; }
+            }
+
             $tradableAs = is_array($instrument->tradable_as)
                             ? $instrument->tradable_as
                             : json_decode($instrument->tradable_as, true) ?? [];
@@ -220,6 +209,8 @@ class ScanCandidates extends Command
                 count: 30
             );
 
+            usort($bars, fn($a,$b) => strcmp($a['date'], $b['date']));
+
             if (count($bars) < 21) {
                 $this->reject('insufficient_bars', $candidate->instrument);
                 continue;
@@ -245,7 +236,8 @@ class ScanCandidates extends Command
                 );
             }
 
-            $atr14   = collect($trs)->take(14)->avg();
+            //$atr14   = collect($trs)->take(14)->avg();
+            $atr14 = collect($trs)->slice(-14)->avg();
             $last    = last($bars)['close'];
             $atrPct  = $atr14 / $last;
 
@@ -257,7 +249,8 @@ class ScanCandidates extends Command
             $todayRangePct = (last($bars)['high'] - last($bars)['low']) / $last;
 
             $ranges = collect($bars)
-                ->take(20)
+                //->take(20)
+                ->slice(-20)
                 ->map(fn ($b) => ($b['high'] - $b['low']) / $b['close']);
 
             $median = $ranges->median();
@@ -308,22 +301,30 @@ class ScanCandidates extends Command
         logger()->channel('scanner')->info('scanner.rank.complete', ['final_count' => $ranked->count()]);
 
         foreach ($ranked as $i => $c) {
-            AiDailyCandidateItem::create([
-                'ai_model_id' => $modelId,
-                'trade_date' => $tradeDate,
-                'symbol'     => $c->symbol,
-                'rank'       => $i + 1,
-                'price'      => $c->price,
-                'score'      => $c->score,
-                'saxo_uic'        => $c->uic,
-                'saxo_asset_type' => $c->asset_type,
-                'metrics_json'=> $c->metrics,
-                'source'     => 'scanner_v4',
-            ]);            
+            AiDailyCandidateItem::updateOrCreate(
+                [
+                    'ai_model_id' => $modelId, 
+                    'trade_date' => $tradeDate,
+                    'symbol'     => $c->symbol
+                ],
+                [
+                    'ai_model_id' => $modelId,
+                    'trade_date' => $tradeDate,
+                    'symbol'     => $c->symbol,
+                    'rank'       => $i + 1,
+                    'price'      => $c->price,
+                    'score'      => $c->score,
+                    'saxo_uic'        => $c->uic,
+                    'saxo_asset_type' => $c->asset_type,
+                    'metrics_json'=> $c->metrics,
+                    'source'     => 'scanner_v4',
+                ]
+            );            
         }
 
         // Step 2 — write compact AI-facing list
-        $symbols = $ranked->sortBy('rank')->pluck('symbol');
+        //$symbols = $ranked->sortBy('rank')->pluck('symbol');
+        $symbols = $ranked->pluck('symbol')->values();
 
         AiDailyCandidate::updateOrCreate(
             ['ai_model_id' => $modelId, 'trade_date' => $tradeDate],
