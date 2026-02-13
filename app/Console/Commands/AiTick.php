@@ -404,7 +404,12 @@ Your reasoning must always:
 TXT;
 $loopPrompt = $defaultLoopPrompt;
 if ($model->loop_prompt_status) {
-   $loopPrompt = $model->loop_prompt ?? $defaultLoopPrompt;
+   //$loopPrompt = $model->loop_prompt ?? $defaultLoopPrompt;
+  $loopPrompt = $dailyPlanModel ? ($dailyPlanModel->locked_loop_prompt ?? ($model->loop_prompt ?? $defaultLoopPrompt)) : $defaultLoopPrompt;
+}
+else
+{
+  $loopPrompt = $dailyPlanModel ? ($dailyPlanModel->locked_loop_prompt ?? $defaultLoopPrompt) : $defaultLoopPrompt;
 }
 
                // Final user prompt: give state + model instructions

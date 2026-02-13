@@ -349,6 +349,8 @@ TXT;
                         'trade_date'  => $tradeDate,
                     ],
                     [
+                        'locked_start_prompt' => $model->start_prompt ?? NULL,
+                        'locked_loop_prompt' => $model->loop_prompt ?? NULL,
                         'plan_json' => $plan,
                     ]
                 );

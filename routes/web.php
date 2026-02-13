@@ -60,7 +60,7 @@ Route::get('/models/{slug}', [ModelsController::class, 'show'])->name('models.sh
 Route::get('/models/{slug}/kanban', [PlanKanbanController::class, 'index'])->name('models.kanban');
 Route::get('/models/{slug}/kanban-v2', [PlanKanbanControllerV2::class, 'index'])->name('models.kanban.v2');
 Route::post('/models/{slug}/kanban', [PlanKanbanController::class, 'update'])->name('models.kanban.update');
-
+Route::get('/models/{slug}/export/{trade_id}', [PlanKanbanController::class, 'exportCompletedTrades'])->name('models.trade.export');
 
 Route::get('/models/{slug}/chat', [ModelChatController::class, 'index'])->name('models.chat');
 Route::get('/models/{slug}/log', [ModelLogController::class, 'index'])->name('models.log');

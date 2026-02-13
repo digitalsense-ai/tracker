@@ -277,7 +277,18 @@
                 </span>
               </div>
 
-              <div class="small">Reason: <span class="bold">{{ $t->exit_reason_code }}</span><br>{{ $t->exit_reason_text }}</div>
+              <div class="small">
+                  <a href="#"
+                     title="Reason: {{ $t->exit_reason_code }} - {{ $t->exit_reason_text }}">
+                     Exit Reason
+                  </a>
+              </div>
+
+              <div class="small">
+                  <a href="{{ route('models.trade.export', ['slug' => $model->slug, 'trade_id' => $t->id]) }}">Export</a>
+              </div>
+
+             {{-- <div class="small">Reason: <span class="bold">{{ $t->exit_reason_code }}</span><br>{{ $t->exit_reason_text }}</div>--}}
             </article>
           @empty
             <div class="small">No closed trades yet.</div>

@@ -260,29 +260,29 @@ class PaperBroker
               ->orderByDesc('trade_date')
               ->value('plan_json');
 
-          ModelLog::create([
-            'ai_model_id' => $model->id,
-            'action' => 'PLAN_JSON_ON_OPEN',
-            'payload' => [],
-          ]);
+          // ModelLog::create([
+          //   'ai_model_id' => $model->id,
+          //   'action' => 'PLAN_JSON_ON_OPEN',
+          //   'payload' => [],
+          // ]);
 
           if ($planJson) {
-              $plans = json_decode($planJson, true);
+              $plans = $planJson;
 
               $plan = collect($plans)->firstWhere('symbol', $symbol);
 
-              ModelLog::create([
-                'ai_model_id' => $model->id,
-                'action' => 'PLAN_JSON_ON_OPEN_VALUES',
-                'payload' => ['plan' => $plan],
-              ]);
+              // ModelLog::create([
+              //   'ai_model_id' => $model->id,
+              //   'action' => 'PLAN_JSON_ON_OPEN_VALUES',
+              //   'payload' => ['plan' => $plan],
+              // ]);
 
               if ($plan) {
-                  ModelLog::create([
-                    'ai_model_id' => $model->id,
-                    'action' => 'PLAN_JSON_ON_OPEN_SL_TP',
-                    'payload' => ['stop_loss' => $plan['stop_loss'], 'take_profit' => $plan['take_profit']],
-                  ]);
+                  // ModelLog::create([
+                  //   'ai_model_id' => $model->id,
+                  //   'action' => 'PLAN_JSON_ON_OPEN_SL_TP',
+                  //   'payload' => ['stop_loss' => $plan['stop_loss'], 'take_profit' => $plan['take_profit']],
+                  // ]);
 
                   $stopPrice   = $plan['stop_loss'];
                   $targetPrice = $plan['take_profit'];
