@@ -28,7 +28,7 @@
 @if($promptno == 1)
   <div class="card" style="padding:16px">
     <div class="bold" style="margin-bottom:6px">Pre-Market Prompt</div>
-    <textarea name="premarket_prompt" rows="10" class="table" disabled="disabled" style="width:100%; height: 100vh; padding:8px">{{ old('premarket_prompt',$model->premarket_prompt) }}</textarea>
+    <textarea name="premarket_prompt" rows="10" class="table" disabled="disabled" style="width:100%; height: 100vh; padding:8px">{{ old('premarket_prompt',$m->premarket_prompt) }}</textarea>
     <div class="small" style="margin-top:6px">
       This is the <b>big planning prompt</b> that runs before the market opens and builds today&apos;s strategy playbook based on news, trends, funding, and your risk rules.
     </div>
@@ -36,15 +36,15 @@
 @elseif($promptno == 2)
   <div class="card" style="padding:16px">
     <div class="bold" style="margin-bottom:6px">Start Prompt</div>
-    <textarea name="start_prompt" rows="16" class="table" disabled="disabled" style="width:100%; height: 100vh; padding:8px">{{ old('start_prompt',$model->start_prompt) }}</textarea>
+    <textarea name="start_prompt" rows="16" class="table" disabled="disabled" style="width:100%; height: 100vh; padding:8px">{{ old('start_prompt',$m->start_prompt) }}</textarea>
     <div class="small" style="margin-top:6px">Used once at boot/start to initialize the model’s policy and state.</div>
   </div>
 @elseif($promptno == 3)
   <div class="card" style="padding:16px">
       <div class="bold" style="margin-bottom:6px">Loop / Check Prompt</div>
-      <textarea name="loop_prompt" rows="16" class="table" disabled="disabled" style="width:100%; height: 100vh; padding:8px">{{ old('loop_prompt',$model->loop_prompt) }}</textarea>
+      <textarea name="loop_prompt" rows="16" class="table" disabled="disabled" style="width:100%; height: 100vh; padding:8px">{{ old('loop_prompt',$m->loop_prompt) }}</textarea>
       <div class="small" style="margin-top:6px">
-        Executed every <b>{{ old('check_interval_min',$model->check_interval_min ?? 15) }}</b> min.
+        Executed every <b>{{ old('check_interval_min',$m->check_interval_min ?? 15) }}</b> min.
         Should output an action + short reasoning. (e.g. HOLD / CLOSE / OPEN)
       </div>
     </div>

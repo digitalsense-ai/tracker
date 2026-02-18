@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug')->unique();
             $table->string('wallet')->nullable();
-            $table->decimal('equity', 14, 2)->nullable();
+            $table->decimal('equity', 14, 2)->nullable()->default(10000);
             $table->decimal('return_pct', 7, 2)->nullable();
             $table->boolean('active')->default(true);
             $table->text('start_prompt')->nullable();
