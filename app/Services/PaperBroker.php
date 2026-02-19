@@ -416,7 +416,7 @@ class PaperBroker
     */
    public function recalculateEquity(AiModel $model): void
    {
-       $start = (float) ($model->start_equity ?? 0);
+       $start = (float) ($model->start_equity ?? 10000);
        // Realized PnL = sum of closed trades
        $realized = (float) Trade::where('ai_model_id', $model->id)
                        ->whereNotNull('closed_at')

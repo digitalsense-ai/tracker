@@ -30,7 +30,36 @@ class PlanKanbanController extends Controller
         $query = AiDailyPlan::where('ai_model_id', $model->id);
         
         if($date)
+        {
             $query->where('trade_date', $date);            
+
+            //Approve auto
+            $plan = $query->first();
+
+            if($plan)
+            {
+                $strategies = $plan ? ($plan->plan_json ?? []) : [];
+
+                foreach ($strategies as $idx => &$s) {
+                    if (!is_array($s)) {
+                        continue;
+                    }
+                    if (!isset($s['id'])) {
+                        $s['id'] = $idx;
+                    }
+
+                    $id = (string) $s['id'];
+                    if(isset($s['approved']))                
+                        $s['approved'] = (!$s['approved']) ? true : $s['approved'];
+                    else               
+                        $s['approved'] = true;
+                }
+                unset($s);
+
+                $plan->plan_json = $strategies;
+                $plan->save();
+            }
+        }
 
         $plans = $query->get(); 
 

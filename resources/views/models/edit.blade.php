@@ -90,7 +90,7 @@
           </div>
           <div>
             <label class="bold">Allow Sleeper Strategies</label>
-            <select name="allow_sleeper_strategies" class="table" style="width:100%;padding:8px">
+            <select name="allow_sleeper_strategies" class="table" style="width:100%;padding:8px" required>
               <option value="" {{ old('allow_sleeper_strategies',$model->allow_sleeper_strategies) === null ? 'selected' : '' }}>Use default</option>
               <option value="1" {{ old('allow_sleeper_strategies',$model->allow_sleeper_strategies) ? 'selected' : '' }}>Yes</option>
               <option value="0" {{ old('allow_sleeper_strategies',$model->allow_sleeper_strategies) === 0 ? 'selected' : '' }}>No</option>
@@ -98,7 +98,7 @@
           </div>
           <div>
             <label class="bold">Allow Activating Sleepers (Loop)</label>
-            <select name="allow_activate_sleepers" class="table" style="width:100%;padding:8px">
+            <select name="allow_activate_sleepers" class="table" style="width:100%;padding:8px" required>
               <option value="" {{ old('allow_activate_sleepers',$model->allow_activate_sleepers) === null ? 'selected' : '' }}>Use default</option>
               <option value="1" {{ old('allow_activate_sleepers',$model->allow_activate_sleepers) ? 'selected' : '' }}>Yes</option>
               <option value="0" {{ old('allow_activate_sleepers',$model->allow_activate_sleepers) === 0 ? 'selected' : '' }}>No</option>
@@ -106,7 +106,7 @@
           </div>
           <div>
             <label class="bold">Allow Early Exit on Invalidation</label>
-            <select name="allow_early_exit_on_invalidation" class="table" style="width:100%;padding:8px">
+            <select name="allow_early_exit_on_invalidation" class="table" style="width:100%;padding:8px" required>
               <option value="" {{ old('allow_early_exit_on_invalidation',$model->allow_early_exit_on_invalidation) === null ? 'selected' : '' }}>Use default</option>
               <option value="1" {{ old('allow_early_exit_on_invalidation',$model->allow_early_exit_on_invalidation) ? 'selected' : '' }}>Yes</option>
               <option value="0" {{ old('allow_early_exit_on_invalidation',$model->allow_early_exit_on_invalidation) === 0 ? 'selected' : '' }}>No</option>
@@ -114,7 +114,7 @@
           </div>
           <div>
             <label class="bold">Max Adds per Position</label>
-            <input name="max_adds_per_position" type="number" min="0" max="10" step="1" value="{{ old('max_adds_per_position',$model->max_adds_per_position) }}" class="table" style="width:100%;padding:8px" placeholder="0">
+            <input name="max_adds_per_position" type="number" min="0" max="10" step="1" value="{{ old('max_adds_per_position',$model->max_adds_per_position) }}" class="table" style="width:100%;padding:8px" placeholder="0" required>
           </div>
           <div>
             <label class="bold">Min Price Move to Trigger Loop (%)</label>

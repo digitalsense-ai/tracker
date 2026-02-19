@@ -27,7 +27,9 @@ class ModelsController extends Controller
     {
         $data = $this->validated($req);
         $data['slug'] = Str::slug($data['name']);
+        $data['equity'] = ($data['equity'] == '' || $data['equity'] == '0.00') ? 10000 : $data['equity'];
         $model = AiModel::create($data);
+        
         return redirect()->route('models.edit', $model)->with('ok','Saved');
     }
 
@@ -40,10 +42,11 @@ class ModelsController extends Controller
     {
         $data = $this->validated($req, $model->id);
         if (!$model->slug) $data['slug'] = Str::slug($data['name']);
-        $model->update($data);
 
-        $model->active = (isset($data['active'])) ? 1 : 0;
-        $model->save();
+        $data['equity'] = ($data['equity'] == '' || $data['equity'] == '0.00') ? 10000 : $data['equity'];
+        $data['active'] = (isset($data['active'])) ? 1 : 0;
+
+        $model->update($data);       
         
         return back()->with('ok','Updated');
     }
@@ -134,7 +137,7 @@ class ModelsController extends Controller
         return $req->validate([
             'name'  => 'required|string|max:120',
             'wallet'=> 'nullable|string|max:120',
-            'equity'=> 'nullable|numeric',
+            'equity'=> 'nullable|numeric',          
             'return_pct'=> 'nullable|numeric',
             'active'=> 'nullable|boolean',
             'start_prompt'=> 'nullable|string',
