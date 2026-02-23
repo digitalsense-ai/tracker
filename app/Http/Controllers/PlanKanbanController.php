@@ -187,6 +187,7 @@ class PlanKanbanController extends Controller
             ->with('status', 'Plan approvals updated.');
     }
 
+/*
     public function exportCompletedTrades(string $slug, string $trade_id, Request $request)
     {
         $fileName = 'completed_trade.txt'; // fixed name
@@ -256,10 +257,62 @@ class PlanKanbanController extends Controller
         // Footer
         $content .= "\n=== End of Export ===\n";
 
-        // Save to storage        
-        $disk->put($fileName, $content);
+       //  // Save to storage        
+       //  $disk->put($fileName, $content);
       
-       return $disk->download($fileName);
+       // return $disk->download($fileName);
+
+         return response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, 'completed_trade_' . now()->format('Ymd_His') . '.txt');
+    }
+*/
+
+    public function exportCompletedTrades(string $slug, string $trade_id, Request $request)
+    {
+        $model = AiModel::where('slug', $slug)->firstOrFail();            
+
+        $trade = Trade::where('ai_model_id', $model->id)
+                    ->where('id', $trade_id)
+                    ->whereNotNull('closed_at')
+                    ->orderByDesc('closed_at')                   
+                    ->firstOrFail();
+
+        $aiDailyPlan = AiDailyPlan::where('ai_model_id', $model->id)      
+                        ->where('trade_date', $trade->date)
+                        ->first();
+
+        $content = "=== Completed Trade Export ===\n";
+        $content .= "Export Date: " . now() . "\n\n";
+
+        $content .= "Trade ID: {$trade->id}\n";
+        $content .= "Symbol: {$trade->ticker} - {$trade->side}\n";
+        $content .= "Qty: {$trade->qty}\n";
+        $content .= "Entry Price: \${$trade->entry_price}\n";
+        $content .= "Exit Price: \${$trade->exit_price}\n";
+        $content .= "Net PNL: \${$trade->net_pnl}\n";
+        $content .= "Completed At: {$trade->closed_at}\n";
+        $content .= "Exit Reason: {$trade->exit_reason_text}\n";
+
+        if ($aiDailyPlan && isset($aiDailyPlan->locked_loop_prompt)) {
+            $content .= "\n=== Loop Prompt ===\n";
+            $content .= json_encode($aiDailyPlan->locked_loop_prompt, JSON_PRETTY_PRINT);
+            $content .= "\n";
+        }
+
+        if ($aiDailyPlan && isset($aiDailyPlan->locked_premarket_prompt)) {
+            $content .= "\n=== Pre-market Prompt ===\n";
+            $content .= json_encode($aiDailyPlan->locked_premarket_prompt, JSON_PRETTY_PRINT);
+            $content .= "\n";
+        }
+
+        $content .= "\n=== End of Export ===\n";
+
+        $fileName = 'completed_trade_' . now()->format('Ymd_His') . '.txt';
+
+        return response()->streamDownload(function () use ($content) {
+            echo $content;
+        }, $fileName);
     }
 
 }

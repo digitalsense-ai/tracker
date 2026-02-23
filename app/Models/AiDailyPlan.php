@@ -11,6 +11,9 @@ class AiDailyPlan extends Model
         'ai_model_id',
         'trade_date',
         'plan_json',
+        'locked_start_prompt',
+        'locked_loop_prompt',
+        'locked_premarket_prompt',
     ];
 
     protected $casts = [

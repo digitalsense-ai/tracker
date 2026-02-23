@@ -35,7 +35,7 @@
 
         <div>
           <label class="bold">Check Interval (minutes)</label>
-          <input name="check_interval_min" type="number" min="1" value="{{ old('check_interval_min',$model->check_interval_min ?? 15) }}" class="table" style="width:100%;padding:8px" required>
+          <input name="check_interval_min" type="number" min="1" value="{{ old('check_interval_min',$model->check_interval_min ?? 60) }}" class="table" style="width:100%;padding:8px" required>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <label class="bold">Active</label>
@@ -150,7 +150,7 @@
         <div class="bold" style="margin-bottom:6px">Loop / Check Prompt</div>
         <textarea id="loop_prompt" name="loop_prompt" rows="16" class="table" {{ isset($model->id) ? ($model->loop_prompt_status == 1 ? '' : 'disabled') : '' }}  style="width:100%;padding:8px">{{ old('loop_prompt',$model->loop_prompt) }}</textarea>
         <div class="small" style="margin-top:6px">
-          Executed every <b>{{ old('check_interval_min',$model->check_interval_min ?? 15) }}</b> min.
+          Executed every <b>{{ old('check_interval_min',$model->check_interval_min ?? 60) }}</b> min.
           Should output an action + short reasoning. (e.g. HOLD / CLOSE / OPEN)
         </div>
 

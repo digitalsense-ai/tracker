@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::table('ai_daily_plans', function (Blueprint $table) {
             $table->text('locked_start_prompt')->nullable()->after('plan_json');
             $table->text('locked_loop_prompt')->nullable()->after('locked_start_prompt');
+            $table->text('locked_premarket_prompt')->nullable()->after('locked_loop_prompt');
         });
     }
 

@@ -351,6 +351,7 @@ TXT;
                     [
                         'locked_start_prompt' => $model->start_prompt ?? NULL,
                         'locked_loop_prompt' => $model->loop_prompt ?? NULL,
+                        'locked_premarket_prompt' => $model->premarket_prompt ?? NULL,
                         'plan_json' => $plan,
                     ]
                 );
