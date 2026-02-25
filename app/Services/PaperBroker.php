@@ -210,7 +210,7 @@ class PaperBroker
    //     $trade->save();
    // }
 
-   protected function openPosition(
+   public function openPosition(
        AiModel $model,
        string $symbol,
        string $side,

@@ -24,6 +24,13 @@ hr.sep { border:0; border-top:1px dashed #e5e7eb; margin:1rem 0; }
     gap: 16px;
 }
 
+.market-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin: 0; vertical-align: middle; }
+
+.status-green { background-color: #28a745; }  /* green */
+.status-red { background-color: #dc3545; }    /* red */
+.status-yellow { background-color: #ffc107; } /* yellow */
+.status-grey { background-color: #6c757d; }   /* grey */
+
 /* Tablet */
 @media (max-width: 640px) {
     .nav-tabs a {

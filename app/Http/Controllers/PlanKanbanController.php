@@ -7,19 +7,34 @@ use App\Models\AiDailyPlan;
 use App\Models\Position;
 use App\Models\Trade;
 use App\Models\ModelLog;
+use App\Models\SaxoInstrument;
+
+use App\Services\SaxoTokenService;
+use App\Services\PaperBroker;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Http;
 
 use Carbon\Carbon;
+use Carbon\CarbonInterval;
 
 class PlanKanbanController extends Controller
 {
+    protected SaxoTokenService $tokenService;
+
+    public function __construct(SaxoTokenService $tokenService)
+    {
+        $this->tokenService = $tokenService;
+    }
+
     /**
      * Show the plan Kanban view for a given model + date.
      */
     public function index(string $slug, Request $request)
-    {
+    {       
+        $broker = app(PaperBroker::class);
+
         $models = AiModel::orderByDesc('return_pct')->get();
 
         $model = AiModel::where('slug', $slug)->firstOrFail();
@@ -38,6 +53,34 @@ class PlanKanbanController extends Controller
 
             if($plan)
             {
+                //Allowed Symbols only with mode = "active_on_open"
+                // Open positions
+                $open = Position::where('ai_model_id', $model->id)
+                            ->where('status', 'open')
+                            ->pluck('ticker');                
+
+                $approved = collect($plan['plan_json'] ?? [])
+                                ->filter(fn ($s) =>
+                                is_array($s) 
+                                &&
+                                    (
+                                        (!empty($s['approved']) && $s['approved']) ||
+                                        (($s['status'] ?? null) === 'approved') ||
+                                        (!empty($s['keep']))
+                                    )
+                                && (($s['mode'] ?? null) === 'active_on_open')    
+                                )
+                                ->pluck('symbol');
+
+                $allowed = $approved
+                            ->map(fn ($s) => strtoupper($s))
+                            ->diff(
+                            $open->map(fn ($s) => strtoupper($s))
+                            )
+                            ->values()
+                            ->all();                          
+                //Allowed Symbols only with mode = "active_on_open"
+
                 $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
                 foreach ($strategies as $idx => &$s) {
@@ -53,6 +96,34 @@ class PlanKanbanController extends Controller
                         $s['approved'] = (!$s['approved']) ? true : $s['approved'];
                     else               
                         $s['approved'] = true;
+
+                    //Move to LIVE TRADE (LANE 3) without AI Tick when mode = "active_on_open"
+                    // Support either `symbol` or `ticker` from the AI
+                    $symbol = strtoupper($s['symbol'] ?? $s['ticker'] ?? '');
+
+                    if (!$symbol || !in_array($symbol, $allowed, true)) {                        
+                        continue; // 🔒 HARD STOP — skip execution
+                    }
+
+                    // Normalise side into our DB enum: 'long' / 'short'
+                    $rawSide = strtolower($s['side'] ?? $s['direction'] ?? 'long');
+                    if ($rawSide === 'buy') {
+                        $side = 'long';
+                    } elseif ($rawSide === 'sell') {
+                        $side = 'short';
+                    } elseif (in_array($rawSide, ['long','short'], true)) {
+                        $side = $rawSide;
+                    } else {
+                        $side = 'long';
+                    }
+
+                    $qty    = (float) ($s['qty'] ?? 1);
+                    if (!$symbol || $qty <= 0) {
+                        continue;
+                    }
+
+                    $broker->openPosition($model, $symbol, $side, $qty);
+                    //Move to LIVE TRADE (LANE 3) without AI Tick when mode = "active_on_open"
                 }
                 unset($s);
 
@@ -114,6 +185,8 @@ class PlanKanbanController extends Controller
            ->map(fn($s) => strtoupper($s))
            ->unique()
            ->all();
+
+       
         // Filter approved strategies so any strategy whose symbol is already live
         // does NOT stay in the "Approved for Today" lane.
         $approvedFiltered = [];
@@ -123,7 +196,43 @@ class PlanKanbanController extends Controller
                // This strategy is already live via an open position -> skip from lane 2
                continue;
            }
-           $approvedFiltered[] = $s;
+           
+
+            $saxo_instrument = SaxoInstrument::where('symbol', 'LIKE', $sym . '%')->firstOrFail();
+ 
+           if($saxo_instrument)
+           {
+            $uic = $saxo_instrument->uic;
+            $assetType = $saxo_instrument->asset_type;
+
+            $baseUrl = rtrim(config('services.saxo.base_url'), '/');
+       
+            $accessToken = app(SaxoTokenService::class)->getToken();
+
+            if (!$baseUrl || !$accessToken) {
+                $this->error('Missing Saxo base_url or access_token in config/services.php (services.saxo.*).');
+                return self::FAILURE;
+            }
+
+            $response = Http::withToken($accessToken)           
+                //->get("https://gateway.saxobank.com/sim/openapi/ref/v1/instruments/details/{$uic}/{$assetType}");
+                ->get("https://gateway.saxobank.com/sim/openapi/ref/v1/instruments/tradingschedule/{$uic}/{$assetType}");
+
+            if ($response->failed()) {
+                throw new \Exception('Failed to fetch instruments: ' . $response->body());
+            }
+
+            $data = $response->json();
+           
+            $marketTiming = $this->getMarketTiming($data);
+
+            //$s['InstrumentDetails'] = $data;
+            $s['marketTiming'] = $marketTiming;
+
+            $approvedFiltered[] = $s;
+           }
+           else
+            $approvedFiltered[] = $s;
         }
         // Replace the original approved list
         $approved = $approvedFiltered;
@@ -138,6 +247,69 @@ class PlanKanbanController extends Controller
             'openPositions'   => $openPositions,
             'completedTrades' => $completedTrades,
         ]);
+    }
+        
+    function getMarketTiming(array $instrumentDetails): array
+    {
+        $sessions = collect($instrumentDetails['Sessions']);
+        $exchangeOffset = $instrumentDetails['TimeZoneOffset']; // "-05:00:00"
+
+        $nowUtc = now()->utc();
+        $nowExchange = $nowUtc->copy()->setTimezone($exchangeOffset);
+
+        // 1️⃣ Find current session
+        $currentSession = $sessions->first(function ($session) use ($nowUtc) {
+            return $nowUtc->gte(Carbon::parse($session['StartTime']))
+                && $nowUtc->lt(Carbon::parse($session['EndTime']));
+        });
+
+        $currentState = $currentSession['State'] ?? 'Closed';
+
+        // 2️⃣ If market is OPEN (AutomatedTrading)
+        if ($currentState === 'AutomatedTrading') {
+
+            $end = Carbon::parse($currentSession['EndTime']);
+            $diff = $nowUtc->diff($end);
+
+            return [
+                'is_open' => true,
+                'state' => $currentState,
+                'message' => 'Market closes in ' . $diff->format('%hh %Im'),
+                'exchange_time' => $nowExchange->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        // 3️⃣ Find NEXT AutomatedTrading session
+        $nextOpenSession = $sessions
+            ->filter(fn ($s) =>
+                $s['State'] === 'AutomatedTrading'
+                && Carbon::parse($s['StartTime'])->gt($nowUtc)
+            )
+            ->sortBy('StartTime')
+            ->first();
+
+        if ($nextOpenSession) {
+
+            $openTime = Carbon::parse($nextOpenSession['StartTime']);
+            $diff = $nowUtc->diff($openTime);
+
+            return [
+                'is_open' => false,
+                'state' => $currentState,
+                'message' => 'Market opens in ' . $diff->format('%hh %Im'),
+                'opens_at_exchange_time' => $openTime
+                    ->copy()
+                    ->setTimezone($exchangeOffset)
+                    ->format('Y-m-d H:i:s'),
+                'exchange_time_now' => $nowExchange->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        return [
+            'is_open' => false,
+            'state' => 'Closed',
+            'message' => 'No upcoming trading session found',
+        ];
     }
 
     /**

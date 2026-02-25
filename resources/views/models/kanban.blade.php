@@ -185,8 +185,27 @@
         <div class="card-body" style="display:flex;flex-direction:column;gap:8px;max-height:640px;overflow:auto">
           @forelse($openPositions as $pos)
             <article class="card" style="padding:12px">
+              @php
+                  $market = $s['marketTiming'] ?? null;
+
+                  $statusClass = match(true) {
+                      $market && $market['is_open'] === true => 'status-green',
+                      $market && in_array($market['state'], ['PreMarket', 'PostMarket']) => 'status-yellow',
+                      $market && $market['is_open'] === false => 'status-red',
+                      default => 'status-grey',
+                  };
+
+                  $statusText = match(true) {
+                      $market && $market['is_open'] === true => 'Market Open',
+                      $market && $market['is_open'] === false => 'Market Closed',
+                      default => 'Unknown',
+                  };
+
+                  $tooltip = $market['message'] ?? 'Market status unavailable';
+              @endphp
+
               <div class="bold">
-                {{ strtoupper($pos->side) }} · {{ $pos->ticker }}
+                {{ strtoupper($pos->side) }} · {{ $pos->ticker }} <div class="market-dot {{ $statusClass }}" title="{{ $tooltip }}"></div>
               </div>
 
               <div class="small">Entry Time: <span class="bold">{{ optional($pos->opened_at)->format('Y-m-d H:i:s') }}</span></div>
