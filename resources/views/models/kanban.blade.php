@@ -186,7 +186,7 @@
           @forelse($openPositions as $pos)
             <article class="card" style="padding:12px">
               @php
-                  $market = $s['marketTiming'] ?? null;
+                  $market = $pos['marketTiming'] ?? null;
 
                   $statusClass = match(true) {
                       $market && $market['is_open'] === true => 'status-green',

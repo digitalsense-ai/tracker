@@ -172,6 +172,42 @@ class PlanKanbanController extends Controller
             ->orderByDesc('opened_at')
             ->get();
 
+        foreach ($openPositions as $openPosition) 
+        {
+            $sym = strtoupper($openPosition['symbol'] ?? $openPosition['ticker'] ?? '');
+            $saxo_instrument = SaxoInstrument::where('symbol', 'LIKE', $sym . '%')->firstOrFail();
+
+            if($saxo_instrument)
+            {
+                $uic = $saxo_instrument->uic;
+                $assetType = $saxo_instrument->asset_type;
+
+                $baseUrl = rtrim(config('services.saxo.base_url'), '/');
+
+                $accessToken = app(SaxoTokenService::class)->getToken();
+
+                if (!$baseUrl || !$accessToken) {
+                    $this->error('Missing Saxo base_url or access_token in config/services.php (services.saxo.*).');
+                    return self::FAILURE;
+                }
+
+                $response = Http::withToken($accessToken)           
+                //->get("https://gateway.saxobank.com/sim/openapi/ref/v1/instruments/details/{$uic}/{$assetType}");
+                ->get("https://gateway.saxobank.com/sim/openapi/ref/v1/instruments/tradingschedule/{$uic}/{$assetType}");
+
+                if ($response->failed()) {
+                    throw new \Exception('Failed to fetch instruments: ' . $response->body());
+                }
+
+                $data = $response->json();
+
+                $marketTiming = $this->getMarketTiming($data);
+
+                //$s['InstrumentDetails'] = $data;
+                $openPosition['marketTiming'] = $marketTiming;                
+            }
+        }
+
         $completedTrades = Trade::where('ai_model_id', $model->id)
             ->whereNotNull('closed_at')
             ->orderByDesc('closed_at')
@@ -185,7 +221,6 @@ class PlanKanbanController extends Controller
            ->map(fn($s) => strtoupper($s))
            ->unique()
            ->all();
-
        
         // Filter approved strategies so any strategy whose symbol is already live
         // does NOT stay in the "Approved for Today" lane.
@@ -197,42 +232,7 @@ class PlanKanbanController extends Controller
                continue;
            }
            
-
-            $saxo_instrument = SaxoInstrument::where('symbol', 'LIKE', $sym . '%')->firstOrFail();
- 
-           if($saxo_instrument)
-           {
-            $uic = $saxo_instrument->uic;
-            $assetType = $saxo_instrument->asset_type;
-
-            $baseUrl = rtrim(config('services.saxo.base_url'), '/');
-       
-            $accessToken = app(SaxoTokenService::class)->getToken();
-
-            if (!$baseUrl || !$accessToken) {
-                $this->error('Missing Saxo base_url or access_token in config/services.php (services.saxo.*).');
-                return self::FAILURE;
-            }
-
-            $response = Http::withToken($accessToken)           
-                //->get("https://gateway.saxobank.com/sim/openapi/ref/v1/instruments/details/{$uic}/{$assetType}");
-                ->get("https://gateway.saxobank.com/sim/openapi/ref/v1/instruments/tradingschedule/{$uic}/{$assetType}");
-
-            if ($response->failed()) {
-                throw new \Exception('Failed to fetch instruments: ' . $response->body());
-            }
-
-            $data = $response->json();
-           
-            $marketTiming = $this->getMarketTiming($data);
-
-            //$s['InstrumentDetails'] = $data;
-            $s['marketTiming'] = $marketTiming;
-
-            $approvedFiltered[] = $s;
-           }
-           else
-            $approvedFiltered[] = $s;
+           $approvedFiltered[] = $s;
         }
         // Replace the original approved list
         $approved = $approvedFiltered;
