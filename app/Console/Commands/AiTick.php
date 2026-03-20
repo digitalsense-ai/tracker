@@ -305,11 +305,19 @@ class AiTick extends Command
                     $ticker = strtoupper($ticker);
                     $priceData = $prices[$ticker] ?? ['last' => null, 'prev' => null];
                     $last = $priceData['last'] ?? 0;
-                    $prevClose = $marketData->getPreviousClose($ticker); // implement this in MarketData service
-                    $vwap = $marketData->getIntradayVWAP($ticker);       // implement VWAP calculation
-                    $avgVolume = $marketData->getAverageVolume($ticker); // e.g., 20-day avg
-                    $currentVolume = $marketData->getCurrentVolume($ticker);
+                    // $prevClose = $marketData->getPreviousClose($ticker); // implement this in MarketData service
+                    // $vwap = $marketData->getIntradayVWAP($ticker);       // implement VWAP calculation
+                    // $avgVolume = $marketData->getAverageVolume($ticker); // e.g., 20-day avg
+                    // $currentVolume = $marketData->getCurrentVolume($ticker);
+                   
+                    $prevClose = $marketData->getPreviousClose($ticker) ?? $last;
+                    $vwap = $marketData->getIntradayVWAP($ticker) ?? $last;
+                    $avgVolume = $marketData->getAverageVolume($ticker) ?? 0;
+                    $currentVolume = $marketData->getCurrentVolume($ticker) ?? 0;
                     
+                    $intradayHigh = $marketData->getIntradayHigh($ticker) ?? $last;
+                    $intradayLow = $marketData->getIntradayLow($ticker) ?? $last;
+
                     // Find planned entry for this ticker if exists                   
                     $planItem = collect($dailyPlan)->first(function ($item) use ($ticker) {
                         return strtoupper($item['symbol'] ?? $item['ticker'] ?? '') === $ticker;
@@ -327,7 +335,10 @@ class AiTick extends Command
                     $distanceToEntryPct = $last ? min(abs(($last - $entryLow) / $entryLow), abs(($last - $entryHigh) / $entryHigh)) * 100 : 0;
                     $distanceToVWAPPct = $vwap ? (($last - $vwap) / $vwap) * 100 : 0;
                     $relativeVolume = $avgVolume ? $currentVolume / $avgVolume : 1;
-                    $intradayRangePct = $prevClose ? ($marketData->getIntradayHigh($ticker) - $marketData->getIntradayLow($ticker)) / $prevClose * 100 : 0;
+                    // $intradayRangePct = $prevClose ? ($marketData->getIntradayHigh($ticker) - $marketData->getIntradayLow($ticker)) / $prevClose * 100 : 0;
+                    $intradayRangePct = $prevClose
+                                        ? (($intradayHigh - $intradayLow) / $prevClose) * 100
+                                        : 0;
 
                     // Simple regime hint
                     if ($dayChangePct > 1 && $distanceToEntryPct < 1) {

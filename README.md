@@ -233,6 +233,34 @@ app/
 
 ---
 
+# 📚 Strategy Playbook Examples
+
+These are example prompt/playbook styles that can be used per `AiModel`.
+
+---
+
+## 1. ORB Breakout
+
+Use when:
+- price is near the opening range boundary
+- relative volume is elevated
+- market context supports continuation
+
+### Example idea
+```json
+{
+  "symbol": "AAPL",
+  "strategy": "orb_breakout",
+  "direction": "LONG",
+  "entry_zone_low": 182.10,
+  "entry_zone_high": 182.80,
+  "invalidation": 181.40,
+  "target_1": 184.50,
+  "target_2": 186.00,
+  "priority": 1,
+  "approved": true
+}
+
 # 🧠 Prompt Architecture (IMPORTANT)
 
 The system is designed to separate concerns:
