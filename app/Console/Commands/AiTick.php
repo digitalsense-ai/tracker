@@ -212,19 +212,19 @@ class AiTick extends Command
                     }
                 }
 
-                ModelLog::create([
-                    'ai_model_id' => $model->id,
-                    'action'      => 'PLAN_DEBUG',
-                    'payload'     => [
-                        'full_plan_count'  => is_array($fullPlan) ? count($fullPlan) : null,
-                        'daily_plan_count' => count($dailyPlan),
-                        'sample_full_plan' => is_array($fullPlan) ? array_slice($fullPlan, 0, 3) : $fullPlan,
-                        'sample_daily'     => array_slice($dailyPlan, 0, 3),
-                        'open_positions_count' => count($openPositionsState),
-                        'prices_keys' => array_keys($prices),
-                        'prices' => $prices,
-                    ],
-                ]);
+                // ModelLog::create([
+                //     'ai_model_id' => $model->id,
+                //     'action'      => 'PLAN_DEBUG',
+                //     'payload'     => [
+                //         'full_plan_count'  => is_array($fullPlan) ? count($fullPlan) : null,
+                //         'daily_plan_count' => count($dailyPlan),
+                //         'sample_full_plan' => is_array($fullPlan) ? array_slice($fullPlan, 0, 3) : $fullPlan,
+                //         'sample_daily'     => array_slice($dailyPlan, 0, 3),
+                //         'open_positions_count' => count($openPositionsState),
+                //         'prices_keys' => array_keys($prices),
+                //         'prices' => $prices,
+                //     ],
+                // ]);
                 
                //Build state object for the AI
                 /*
