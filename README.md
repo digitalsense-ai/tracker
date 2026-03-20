@@ -1,252 +1,322 @@
-# 📊 AI Trading Tracker (ORB + LLM Decision Engine)
+# 📊 AI Trading Tracker
 
-A Laravel-based trading system for **strategy analysis, simulation, and AI-driven decision making**, focused on Opening Range Breakout (ORB) and related intraday strategies.
+A Laravel-based AI trading engine for **intraday strategy execution, simulation, and decision automation**.
 
-This project combines:
+This system combines:
 
-* Market data + strategy logic
-* AI-driven decision engine (LLM)
-* Risk + execution simulation (paper trading)
-* Full logging and model-based workflow
+* AI-generated trade plans
+* Real-time decision loops
+* Structured state management
+* Paper trading execution
+* Full logging and evaluation
 
 ---
 
 # 🚀 Overview
 
-The system tracks intraday setups and uses configurable AI models to:
+The system runs a **model-driven trading workflow**:
 
-* Plan trading opportunities (pre-market)
-* Evaluate setups at market open
-* Make live trading decisions during the session
-* Simulate trades with risk controls
-* Log and analyze performance
-
-It is designed to evolve toward a **fully autonomous trading system**.
+1. Pre-market generates a daily plan (`AiDailyPlan`)
+2. Approved ideas become tradable (lane 3)
+3. `ai:tick` runs on interval
+4. AI evaluates current state
+5. Decisions are parsed and executed via paper trading
 
 ---
 
-# 🧠 Core Concepts
-
-## AI Model
-
-Each trading model is configurable and stored in `AiModel`.
-
-It defines:
-
-* Prompts:
-
-  * `premarket_prompt`
-  * `start_prompt`
-  * `loop_prompt`
-* Timing:
-
-  * `premarket_run_time`
-  * `check_interval_min`
-  * `loop_min_price_move_pct`
-* Risk constraints:
-
-  * max strategies per day
-  * max symbols per day
-  * max adds per position
-  * exposure / leverage / drawdown (future-ready)
-
-👉 Think of an AI Model as a **self-contained trading brain**
-
----
-
-## Trading Flow (CURRENT IMPLEMENTATION)
+# 🧠 Core Flow
 
 ```text
-Market Data / Scanner
-→ Build STATE object
-→ Loop Prompt (LLM)
+Pre-market → AiDailyPlan
+→ Approved plan (lane 3)
+→ ai:tick
+→ Build STATE
+→ loop_min_price_move_pct filter
+→ OpenAI (LLM)
 → AiDecisionParser
-→ RiskManager
+→ Qty validation / clamp
 → PaperBroker
-→ Positions / Logs / Results
+→ Positions / Trades / Logs / EquitySnapshot
 ```
-
-### Important
-
-Although the system supports a 3-phase design (see below), the **current runtime is primarily loop-driven**.
 
 ---
 
-## Target Architecture (DESIGNED FLOW)
+# ⚙️ AiTick (Execution Engine)
 
-```text
-1. Pre-Market Planning
-2. Session Start Activation
-3. Intraday Loop Execution
-```
+`ai:tick` is the core runtime.
 
-### 1. Pre-Market Prompt
+Each cycle:
 
-* Builds daily playbook
-* Selects symbols + strategies
-* Defines entry zones, invalidation, targets
-* Stored in `AiDailyPlan`
-
-### 2. Start Prompt (Open Phase)
-
-* Validates pre-market ideas at open
-* Activates or cancels setups
-* Converts plan → actionable state
-
-### 3. Loop Prompt (CORE ENGINE)
-
-* Runs every N minutes
-* Receives `STATE`
-* Returns decision:
-
-  * `OPEN`
-  * `CLOSE`
-  * `HOLD`
+* loads open positions and recent trades
+* loads approved daily plan
+* builds a rich `STATE`
+* skips if market hasn’t moved enough
+* calls OpenAI
+* parses decision
+* validates quantity
+* executes via `PaperBroker`
+* logs result and snapshots equity
 
 ---
 
-# ⚙️ Decision Flow
+# 📦 STATE Object
 
-```text
-STATE → Prompt → LLM → JSON → Parser → Risk → Execution
+The AI receives a structured `STATE` JSON.
+
+## Key fields
+
+```json
+{
+  "time": "...",
+  "session": {},
+  "model": {},
+  "account": {},
+  "open_positions": [],
+  "prices": {},
+  "daily_plan": {},
+  "watchlist": [],
+  "market_context": {},
+  "recent_actions": []
+}
 ```
-
-## Components
-
-### STATE
-
-Built from:
-
-* open positions
-* prices
-* exposure
-* model settings
-* daily plan (future integration)
 
 ---
 
-### Prompt (Loop)
+## session
 
-Sent via `ResponsesClient`
+```json
+{
+  "market": "US",
+  "phase": "premarket|intraday|close",
+  "minutes_since_open": 42
+}
+```
 
-Expected output:
+---
+
+## model
+
+Execution rules:
+
+* check_interval_min
+* loop_min_price_move_pct
+* per_trade_alloc_pct
+* max_exposure_pct
+* max_drawdown_pct
+* max_concurrent_trades
+* cooldown_minutes
+* max_adds_per_position
+
+---
+
+## account
+
+```json
+{
+  "equity": 100000,
+  "cash": 76000,
+  "used_exposure_pct": 18.5,
+  "day_pnl": 420.25,
+  "drawdown_pct": 1.1
+}
+```
+
+---
+
+## daily_plan
+
+```json
+{
+  "trade_date": "2026-03-20",
+  "lane": 3,
+  "approved_symbols": ["AAPL", "NVDA"],
+  "items": []
+}
+```
+
+---
+
+## watchlist (core execution layer)
+
+Each symbol includes:
+
+* ticker
+* last
+* change_from_prev_loop_pct
+* day_change_pct
+* distance_to_entry_pct
+* distance_to_vwap_pct
+* relative_volume
+* intraday_range_pct
+* regime_hint
+
+### Sizing fields
+
+* entry_reference
+* base_trade_budget
+* max_qty
+* allowed_size_multipliers
+
+---
+
+# 🧠 AI Decision Contract
+
+The AI must return **pure JSON only**.
 
 ```json
 {
   "action": "OPEN|CLOSE|HOLD",
-  "strategy": { "name": "string" },
-  "reasoning": "string",
+  "strategy": "short description",
+  "reasoning": "brief explanation",
   "orders": []
 }
 ```
 
 ---
 
-### Parser (`AiDecisionParser`)
+## Example OPEN
 
-* Validates JSON
-* Strips formatting
-* Defaults to `HOLD` on failure
-* Only allows:
-
-  * `OPEN`
-  * `CLOSE`
-  * `HOLD`
-
----
-
-### Risk Layer (`RiskManager`)
-
-* Validates trades against model constraints
-* Prevents invalid or excessive exposure
-
----
-
-### Execution (`PaperBroker`)
-
-* Simulates trades
-* Updates positions
-* Tracks PnL
-
----
-
-### Persistence
-
-* `Position` → open trades
-* `Trade` → trade history
-* `ModelLog` → AI decisions + payload
-* `AiDailyPlan` → daily playbook
-
----
-
-# 🧩 Project Structure
-
-## Backend (Laravel)
-
-```
-app/
- ├── Models/
- │   ├── AiModel.php
- │   ├── AiDailyPlan.php
- │   ├── Position.php
- │   ├── Trade.php
- │   └── ModelLog.php
- │
- ├── Services/
- │   ├── StrategyEngine.php
- │   ├── ResponsesClient.php
- │   ├── AiDecisionParser.php
- │   ├── RiskManager.php
- │   ├── PaperBroker.php
- │   ├── PortfolioService.php
- │   └── BacktestService.php
- │
- ├── Http/Controllers/
- │   └── AI + tracker controllers
+```json
+{
+  "action": "OPEN",
+  "strategy": "AAPL breakout long",
+  "reasoning": "Strong momentum and plan alignment",
+  "orders": [
+    {
+      "symbol": "AAPL",
+      "side": "BUY",
+      "qty": 20,
+      "type": "MARKET",
+      "stop": 181.5,
+      "target": 185.0
+    }
+  ]
+}
 ```
 
 ---
 
-## Frontend
+## Example HOLD
 
-* Blade templates (`resources/views`)
-* Tailwind CSS
-* Alpine.js
-* Lightweight Charts
+```json
+{
+  "action": "HOLD",
+  "strategy": "hold_existing",
+  "reasoning": "No high-quality setup",
+  "orders": []
+}
+```
 
 ---
 
-## Routes
+# 🧩 Prompt Architecture
 
+| Phase      | Purpose              |
+| ---------- | -------------------- |
+| Pre-market | Build daily playbook |
+| Start      | Validate at open     |
+| Loop       | Execute trades       |
+
+👉 Current runtime is **loop-driven using approved plans**
+
+---
+
+# ✍️ Prompt Examples
+
+## 🔹 System Prompt (CORE)
+
+```text
+You are an autonomous trading agent managing a single paper trading account.
+
+You receive a STATE JSON object.
+Use STATE as the single source of truth.
+
+Your job is to return exactly one decision:
+OPEN, CLOSE, or HOLD.
+
+Rules:
+- Only trade symbols in state.allowed_symbols
+- Only open trades in state.daily_plan.approved_symbols
+- Never open a symbol already in open_positions
+- Always define stop and target
+- Never exceed watchlist.max_qty
+- Use allowed_size_multipliers
+- If uncertain → HOLD
+
+Return ONLY JSON.
 ```
-/models                → AI models
-/models/{slug}         → model overview
-/models/{slug}/prompt  → prompt editor
-/models/{slug}/log     → decision logs
-/models/{slug}/chat    → AI interaction
 
-/dashboard             → tracker dashboard
-/signals               → signals
-/results               → results
-/backtest              → backtesting
+---
+
+## 🔹 Loop Prompt
+
+```text
+On each tick:
+
+1. Review open_positions
+- Close if stop, target, or invalidation is hit
+- Close if thesis no longer valid
+
+2. Review daily_plan + watchlist
+- Only trade approved symbols
+- Prefer plan-aligned setups
+
+Use:
+- change_from_prev_loop_pct
+- day_change_pct
+- distance_to_entry_pct
+- distance_to_vwap_pct
+- relative_volume
+- intraday_range_pct
+- regime_hint
+
+3. OPEN only when:
+- high-quality setup
+- clear regime
+- valid entry/stop/target
+- qty within max_qty
+
+4. Otherwise HOLD
+```
+
+---
+
+## 🔹 Pre-Market Prompt
+
+```text
+You are my pre-market strategist.
+
+Create today's playbook.
+
+Return:
+- approved_symbols
+- setups
+- entry zones
+- invalidation levels
+- targets
+- priority
+
+Focus on quality over quantity.
+```
+
+---
+
+## 🔹 Start Prompt (optional)
+
+```text
+Validate today's plan at market open.
+
+- keep valid setups
+- cancel broken setups
+- confirm active opportunities
 ```
 
 ---
 
 # 📚 Strategy Playbook Examples
 
-These are example prompt/playbook styles that can be used per `AiModel`.
-
----
-
 ## 1. ORB Breakout
 
-Use when:
-- price is near the opening range boundary
-- relative volume is elevated
-- market context supports continuation
-
-### Example idea
 ```json
 {
   "symbol": "AAPL",
@@ -256,118 +326,130 @@ Use when:
   "entry_zone_high": 182.80,
   "invalidation": 181.40,
   "target_1": 184.50,
-  "target_2": 186.00,
-  "priority": 1,
-  "approved": true
+  "target_2": 186.00
 }
-
-# 🧠 Prompt Architecture (IMPORTANT)
-
-The system is designed to separate concerns:
-
-| Phase      | Purpose                    | Output              |
-| ---------- | -------------------------- | ------------------- |
-| Pre-Market | Strategy planning          | Daily playbook      |
-| Start      | Activation filter          | Active setups       |
-| Loop       | Execution + risk decisions | OPEN / CLOSE / HOLD |
+```
 
 ---
 
-## Loop Prompt Rules (CRITICAL)
+## 2. Momentum
 
-* Must return valid JSON
-* Must only use:
-
-  * `OPEN`
-  * `CLOSE`
-  * `HOLD`
-* No markdown / no extra text
-* If invalid → system defaults to HOLD
-
----
-
-# 📉 Strategy Scope
-
-Supports multiple intraday strategies:
-
-* Opening Range Breakout (ORB)
-* Breakout + Retest
-* Momentum
-* VWAP Reversion
-* Trend Following
-* Gap & Go / Gap Fade
-
-Strategy logic is enforced partly via:
-
-* prompt design
-* `StrategyEngine`
-* model configuration
+```json
+{
+  "symbol": "NVDA",
+  "strategy": "momentum",
+  "direction": "LONG",
+  "entry_zone_low": 918.00,
+  "entry_zone_high": 922.00,
+  "invalidation": 912.00,
+  "target_1": 935.00
+}
+```
 
 ---
 
-# 📊 Logging & Debugging
+## 3. VWAP Reversion
 
-Every decision cycle can be tracked via:
+```json
+{
+  "symbol": "TSLA",
+  "strategy": "vwap_reversion",
+  "direction": "SHORT",
+  "entry_zone_low": 171.80,
+  "entry_zone_high": 172.40,
+  "invalidation": 173.20,
+  "target_1": 169.90
+}
+```
 
-* `ModelLog`
-* positions
-* trade history
-* results views
+---
 
-This enables:
+## 4. Gap and Go
 
-* prompt debugging
-* strategy evaluation
-* model comparison
+```json
+{
+  "symbol": "AMD",
+  "strategy": "gap_and_go",
+  "direction": "LONG",
+  "entry_zone_low": 164.20,
+  "entry_zone_high": 164.90,
+  "invalidation": 163.40,
+  "target_1": 166.80
+}
+```
+
+---
+
+## 5. Gap Fade
+
+```json
+{
+  "symbol": "META",
+  "strategy": "gap_fade",
+  "direction": "SHORT",
+  "entry_zone_low": 498.00,
+  "entry_zone_high": 499.20,
+  "invalidation": 500.40,
+  "target_1": 493.50
+}
+```
+
+---
+
+# 📏 Sizing Logic
+
+AI sees:
+
+* base_trade_budget
+* entry_reference
+* max_qty
+* allowed_size_multipliers
+
+Backend enforces:
+
+* qty ≤ max_qty
+* invalid qty → adjusted or HOLD
+
+---
+
+# ⚡ loop_min_price_move_pct
+
+Before running AI:
+
+* compare current price vs last loop
+* if movement < threshold → skip
+
+Benefits:
+
+* avoids noise
+* reduces overtrading
+* saves API cost
+
+---
+
+# 🧱 Core Components
+
+| Component        | Role                 |
+| ---------------- | -------------------- |
+| AiTick           | Execution loop       |
+| AiDecisionParser | JSON validation      |
+| PaperBroker      | Trade execution      |
+| ModelLog         | Logging              |
+| EquitySnapshot   | Performance tracking |
+| MarketData       | Price + indicators   |
 
 ---
 
 # ⚠️ Known Limitations
 
-* Loop prompt currently drives most execution
-* Pre-market and start phases not fully enforced
-* Parser only supports:
-
-  * `OPEN`
-  * `CLOSE`
-  * `HOLD`
-* No native support yet for:
-
-  * scaling
-  * partial exits
-  * stop adjustments
-* Routes folder contains legacy / backup files
-* Some architecture still evolving
+* Only supports OPEN / CLOSE / HOLD
+* No scaling or partial exits yet
+* Strategy logic partly lives in prompts
+* Loop is primary execution engine
 
 ---
 
-# 🛣 Roadmap
-
-Planned improvements:
-
-* Enforce full 3-phase architecture
-* Expand parser:
-
-  * `ADJUST`
-  * `SCALE`
-* Integrate `AiDailyPlan` into loop decisions
-* Improve risk engine enforcement vs prompt
-* Clean up routes and patch files
-* Add real-time data integration
-* Enable semi/fully automated execution
-
----
-
-# ⚡ Development
-
-## Requirements
-
-* PHP 8.1+
-* Laravel 10+
-* Node (Vite)
-* MySQL / MariaDB
-
-## Setup
+# 🛠 Setup
 
 ```bash
 git clone https://github.com/digitalsense-ai/tracker.git
@@ -385,35 +467,24 @@ php artisan serve
 
 ---
 
-# 🧪 Philosophy
+# 🧠 Philosophy
 
-This project is not just a tracker.
+The system works when these align:
 
-It is an attempt to build:
+* STATE
+* PROMPTS
+* PARSER
+* EXECUTION
 
-> A modular AI trading system where prompts, data, and execution form a closed feedback loop.
-
----
-
-# 👨‍💻 Author Notes
-
-* Prompts are as important as code
-* Keep logic deterministic where possible
-* Let AI decide *what*, not *how to execute*
-* Always prioritize risk over opportunity
+👉 This is not just automation
+👉 It is **controlled AI decision-making**
 
 ---
 
 # 📌 Final Thought
 
-The strength of this system comes from:
+The strength of this system is:
 
-👉 alignment between:
+**Structured state + adaptive AI + strict execution rules**
 
-* STATE
-* PROMPTS
-* PARSER
-* RISK
-* EXECUTION
-
-When those align, the system becomes **predictable, testable, and scalable**.
+That is what makes it scalable.
