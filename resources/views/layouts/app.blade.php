@@ -22,6 +22,8 @@
       <a href="{{ route('live.index') }}" class="{{ request()->routeIs('live.index') ? 'active' : '' }}">Live</a>
       <a href="{{ route('profiles.leaderboard') }}" class="{{ request()->routeIs('profiles.leaderboard') ? 'active' : '' }}">Leaderboard</a>
       <a href="{{ route('models.index') }}" class="{{ request()->routeIs('models.*') ? 'active' : '' }}">Models</a>
+      <a href="{{ route('trade-reviews.index') }}" class="text-sm text-gray-700 hover:text-black">Trade Reviews</a>
+      <a href="{{ route('feedback-summaries.index') }}" class="text-sm text-gray-700 hover:text-black">Feedback Summaries</a>
     </nav>
   </div>
 </header>

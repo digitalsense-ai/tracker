@@ -101,6 +101,9 @@ class Kernel extends ConsoleKernel
                 Log::channel('saxo')->error('Saxo refresh health check failed: '.$e->getMessage());
             }
         })->everyFifteenMinutes();
+
+        $schedule->command('ai:review-trades --days=7')->dailyAt('22:10');
+        $schedule->command('ai:summarize-feedback --days=7')->dailyAt('22:20');
     }
 
     /**

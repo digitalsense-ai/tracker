@@ -19,6 +19,8 @@ use App\Http\Controllers\PlanKanbanControllerV2;
 use App\Http\Controllers\ModelChatController;
 use App\Http\Controllers\ModelLogController;
 use App\Http\Controllers\ModelPromptController;
+use App\Http\Controllers\TradeReviewController;
+use App\Http\Controllers\FeedbackSummaryController;
 
 //use App\Models\AiModel;
 
@@ -111,6 +113,11 @@ Route::get('/saxo/callback', function (
     return 'Saxo connected successfully 🎉';
 })->name('saxo.callback');
 
+Route::get('/trade-reviews', [TradeReviewController::class, 'index'])->name('trade-reviews.index');
+Route::get('/trade-reviews/{tradeReview}', [TradeReviewController::class, 'show'])->name('trade-reviews.show');
+
+Route::get('/feedback-summaries', [FeedbackSummaryController::class, 'index'])->name('feedback-summaries.index');
+Route::get('/feedback-summaries/{aiModel}', [FeedbackSummaryController::class, 'show'])->name('feedback-summaries.show');
 
 // Route::get('/saxo/login', function() {
 //     $state = csrf_token();
