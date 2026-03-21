@@ -123,6 +123,7 @@ class PlanKanbanController extends Controller
                     }
 
                     $broker->openPosition($model, $symbol, $side, $qty);
+                    $broker->recalculateEquity($model);
                     //Move to LIVE TRADE (LANE 3) without AI Tick when mode = "active_on_open"
                 }
                 unset($s);

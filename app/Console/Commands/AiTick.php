@@ -37,9 +37,7 @@ class AiTick extends Command
                // ------------------------------
                // 1) Respect check interval
                // ------------------------------           
-               $interval = $model->check_interval_min
-                    ?? $model->check_interval_min
-                    ?? 1;
+               $interval = $model->check_interval_min ?? 1;
 
                 /**
                  * 🔒 ATOMIC CLAIM
@@ -312,33 +310,34 @@ class AiTick extends Command
                    
                     $prevClose = $marketData->getPreviousClose($ticker) ?? $last;
                     $vwap = $marketData->getIntradayVWAP($ticker) ?? $last;
-                    $avgVolume = $marketData->getAverageVolume($ticker) ?? 0;
-                    $currentVolume = $marketData->getCurrentVolume($ticker) ?? 0;
-                    
+                    $avgDailyVolume = $marketData->getAverageVolume($ticker) ?? 0;
+                    $avgBarVolume = $marketData->getAverageIntradayBarVolume($ticker) ?? 0;
+                    $latestBarVolume = $marketData->getCurrentVolume($ticker) ?? 0;
                     $intradayHigh = $marketData->getIntradayHigh($ticker) ?? $last;
                     $intradayLow = $marketData->getIntradayLow($ticker) ?? $last;
-
-                    // Find planned entry for this ticker if exists                   
+                    // Find planned entry for this ticker if exists
                     $planItem = collect($dailyPlan)->first(function ($item) use ($ticker) {
-                        return strtoupper($item['symbol'] ?? $item['ticker'] ?? '') === $ticker;
+                       return strtoupper($item['symbol'] ?? $item['ticker'] ?? '') === $ticker;
                     });
                     $entryLow = $planItem['entry_zone_low'] ?? $last;
                     $entryHigh = $planItem['entry_zone_high'] ?? $last;
-
                     $entryReference = $entryLow ?: ($entryHigh ?: $last);
                     $maxQty = ($entryReference > 0 && $baseTradeBudget > 0)
-                        ? (int) floor($baseTradeBudget / $entryReference)
-                        : 0;
-
+                       ? (int) floor($baseTradeBudget / $entryReference)
+                       : 0;
                     // Computed metrics
                     $dayChangePct = $prevClose ? (($last - $prevClose) / $prevClose) * 100 : 0;
-                    $distanceToEntryPct = $last ? min(abs(($last - $entryLow) / $entryLow), abs(($last - $entryHigh) / $entryHigh)) * 100 : 0;
+                    $distanceToEntryPct = $last
+                       ? min(abs(($last - $entryLow) / $entryLow), abs(($last - $entryHigh) / $entryHigh)) * 100
+                       : 0;
                     $distanceToVWAPPct = $vwap ? (($last - $vwap) / $vwap) * 100 : 0;
-                    $relativeVolume = $avgVolume ? $currentVolume / $avgVolume : 1;
-                    // $intradayRangePct = $prevClose ? ($marketData->getIntradayHigh($ticker) - $marketData->getIntradayLow($ticker)) / $prevClose * 100 : 0;
+                    // bar-to-bar relative volume
+                    $relativeVolume = $avgBarVolume > 0
+                       ? round($latestBarVolume / $avgBarVolume, 2)
+                       : 0;
                     $intradayRangePct = $prevClose
-                                        ? (($intradayHigh - $intradayLow) / $prevClose) * 100
-                                        : 0;
+                       ? (($intradayHigh - $intradayLow) / $prevClose) * 100
+                       : 0;
 
                     // Simple regime hint
                     if ($dayChangePct > 1 && $distanceToEntryPct < 1) {
@@ -349,22 +348,29 @@ class AiTick extends Command
                         $regimeHint = 'neutral';
                     }
 
+                    $prevLoopPrice = $priceData['prev'] ?? null;
+                    $changeFromPrevLoopPct = ($prevLoopPrice && $prevLoopPrice > 0)
+                       ? (($last - $prevLoopPrice) / $prevLoopPrice) * 100
+                       : null;
+                    
                     $watchlist[] = [
-                        'ticker' => $ticker,
-                        'last' => $last,
-                        'prev_loop_price' => $priceData['prev'] ?? $last,
-                        'change_from_prev_loop_pct' => $priceData['prev'] ? (($last - $priceData['prev']) / $priceData['prev']) * 100 : 0,
-                        'day_change_pct' => round($dayChangePct, 2),
-                        'distance_to_entry_pct' => round($distanceToEntryPct, 2),
-                        'distance_to_vwap_pct' => round($distanceToVWAPPct, 2),
-                        'relative_volume' => round($relativeVolume, 2),
-                        'intraday_range_pct' => round($intradayRangePct, 2),
-                        'regime_hint' => $regimeHint,
-
-                        'entry_reference' => round((float) $entryReference, 4),
-                        'base_trade_budget' => $baseTradeBudget,
-                        'max_qty' => $maxQty,
-                        'allowed_size_multipliers' => [0.25, 0.5, 1.0],                       
+                       'ticker' => $ticker,
+                       'last' => $last,
+                       'prev_loop_price' => $prevLoopPrice,
+                       'change_from_prev_loop_pct' => $changeFromPrevLoopPct !== null ? round($changeFromPrevLoopPct, 2) : null,
+                       'day_change_pct' => round($dayChangePct, 2),
+                       'distance_to_entry_pct' => round($distanceToEntryPct, 2),
+                       'distance_to_vwap_pct' => round($distanceToVWAPPct, 2),
+                       'avg_daily_volume' => round((float) $avgDailyVolume, 2),
+                       'avg_bar_volume' => round((float) $avgBarVolume, 2),
+                       'current_volume' => round((float) $latestBarVolume, 2),
+                       'relative_volume' => round((float) $relativeVolume, 2),
+                       'intraday_range_pct' => round($intradayRangePct, 2),
+                       'regime_hint' => $regimeHint,
+                       'entry_reference' => round((float) $entryReference, 4),
+                       'base_trade_budget' => $baseTradeBudget,
+                       'max_qty' => $maxQty,
+                       'allowed_size_multipliers' => [0.25, 0.5, 1.0],
                     ];
                 }
                 //end WATCHLIST
@@ -374,35 +380,58 @@ class AiTick extends Command
                 $marketContext = [];
 
                 // 1️ Trend: based on price momentum of tracked symbols
-                $priceChanges = array_map(fn($p) => $p['last'] - ($p['prev'] ?? $p['last']), $prices);
-                $avgChange = count($priceChanges) ? array_sum($priceChanges) / count($priceChanges) : 0;
+                // $priceChanges = array_map(fn($p) => $p['last'] - ($p['prev'] ?? $p['last']), $prices);
+                // $avgChange = count($priceChanges) ? array_sum($priceChanges) / count($priceChanges) : 0;
 
-                if ($avgChange > 0.2) { // adjust threshold as needed
-                    $marketContext['trend'] = 'bullish';
-                } elseif ($avgChange < -0.2) {
-                    $marketContext['trend'] = 'bearish';
+                // if ($avgChange > 0.2) { // adjust threshold as needed
+                //     $marketContext['trend'] = 'bullish';
+                // } elseif ($avgChange < -0.2) {
+                //     $marketContext['trend'] = 'bearish';
+                // } else {
+                //     $marketContext['trend'] = 'neutral';
+                // }
+
+                $validPriceChanges = collect($prices)
+                                       ->filter(fn ($p) => isset($p['last'], $p['prev']) && $p['prev'] !== null && $p['prev'] > 0)
+                                       ->map(fn ($p) => (($p['last'] - $p['prev']) / $p['prev']) * 100)
+                                       ->values();
+                $avgChangePct = $validPriceChanges->isNotEmpty() ? $validPriceChanges->avg() : 0;
+
+                if ($avgChangePct > 0.3) {
+                   $marketContext['trend'] = 'bullish';
+                } elseif ($avgChangePct < -0.3) {
+                   $marketContext['trend'] = 'bearish';
                 } else {
-                    $marketContext['trend'] = 'neutral';
+                   $marketContext['trend'] = 'neutral';
                 }
 
                 // 2️ Volatility: use intraday price range
-                $intradayRanges = array_map(fn($p) => $p['last'] - ($p['prev'] ?? $p['last']), $prices);
-                $avgRange = count($intradayRanges) ? array_sum(array_map('abs', $intradayRanges)) / count($intradayRanges) : 0;
-
-                if ($avgRange < 0.5) {
-                    $marketContext['volatility'] = 'low';
-                } elseif ($avgRange < 2) {
-                    $marketContext['volatility'] = 'normal';
+                $rangeValues = collect($watchlist)
+                                   ->pluck('intraday_range_pct')
+                                   ->filter(fn ($v) => $v !== null)
+                                   ->values();
+                $avgRange = $rangeValues->isNotEmpty() ? $rangeValues->avg() : 0;
+                if ($avgRange < 1.0) {
+                   $marketContext['volatility'] = 'low';
+                } elseif ($avgRange < 3.0) {
+                   $marketContext['volatility'] = 'normal';
                 } else {
-                    $marketContext['volatility'] = 'high';
+                   $marketContext['volatility'] = 'high';
                 }
 
                 // 3️ Breadth: number of positions advancing vs declining
-                $up = 0; $down = 0;
+                $up = 0; $down = 0;                
                 foreach ($prices as $p) {
-                    if (($p['last'] ?? 0) > ($p['prev'] ?? 0)) $up++;
-                    elseif (($p['last'] ?? 0) < ($p['prev'] ?? 0)) $down++;
+                   if (!isset($p['last'], $p['prev']) || $p['prev'] === null || $p['prev'] <= 0) {
+                       continue;
+                   }
+                   if ($p['last'] > $p['prev']) {
+                       $up++;
+                   } elseif ($p['last'] < $p['prev']) {
+                       $down++;
+                   }
                 }
+
                 $total = $up + $down;
                 if ($total > 0) {
                     $upPct = $up / $total;
@@ -471,19 +500,24 @@ class AiTick extends Command
                     'watchlist' => $watchlist,
 
                     'market_context' => $marketContext,
-                                       
+                      
                     'recent_actions' => array_map(function ($t) use ($now) {
-                        $referenceTime = !empty($t['closed_at']) ? $t['closed_at'] : ($t['opened_at'] ?? $now);
-
-                        return [
-                            'ticker' => $t['symbol'] ?? $t['ticker'],
-                            'action' => !empty($t['closed_at']) ? 'CLOSE' : 'OPEN',
-                            'side' => strtoupper($t['side'] ?? ''),
-                            'minutes_ago' => $now->diffInMinutes(Carbon::parse($referenceTime)),
-                        ];
-                    }, $recentTradesState),               
-                                    ];
+                       $referenceTime = !empty($t['closed_at'])
+                           ? Carbon::parse($t['closed_at'])
+                           : Carbon::parse($t['opened_at'] ?? $now);
+                       return [
+                           'ticker' => strtoupper($t['symbol'] ?? $t['ticker'] ?? ''),
+                           'action' => !empty($t['closed_at']) ? 'CLOSE' : 'OPEN',
+                           'side' => strtoupper($t['side'] ?? ''),
+                           'minutes_ago' => $referenceTime->diffInMinutes($now),
+                       ];
+                    }, $recentTradesState),                                       
+                ];
               
+                if (config('app.debug')) {
+                   Log::info('AI tick state snapshot', ['state' => $state]);
+                }
+
                 // 🔥 INSERT HERE
                 if (!$this->shouldRunLoop($model, $state)) {
                     ModelLog::create([

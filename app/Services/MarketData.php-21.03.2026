@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\SymbolMapping;
 use App\Services\SaxoTokenService;
 
-//use Carbon\Carbon;
+use Carbon\Carbon;
 
 class MarketData
 {
@@ -41,8 +41,7 @@ class MarketData
 
             // 2️⃣ Call Saxo API
             $resp = Http::withToken($accessToken)
-                //->get(config('services.saxo.base_url') . '/trade/v1/infoprices', [
-                ->get(rtrim(config('services.saxo.base_url'), '/') . '/trade/v1/infoprices', [
+                ->get(config('services.saxo.base_url') . '/trade/v1/infoprices', [
                     'Uic'       => $map->saxo_uic,
                     'AssetType' => $map->saxo_asset_type,
                 ]);
@@ -57,13 +56,10 @@ class MarketData
             }
 
             $data = $resp->json();
-
-            if (config('app.debug')) {
-                Log::channel('saxo')->info('Saxo InfoPrice json', [
-                    'symbol' => $symbol,
-                    'json'   => $data
-                ]);
-            }
+            Log::channel('saxo')->info('Saxo InfoPrice json', [
+                'symbol' => $symbol,
+                'json'   => $data
+            ]);
 
             $q = $data['Quote'] ?? [];
             return $q['Mid'] ?? $q['Ask'] ?? $q['Bid'] ?? null;
@@ -88,7 +84,7 @@ class MarketData
         return $this->tokenService->getToken();
     }
 
-    protected function getChartData(string $symbol, int $horizon, int $count = 100, ?string $time = null, ?string $mode = null): array
+    protected function getChartData(string $symbol, int $horizon, int $count = 100): array
     {
         $map = $this->getEnabledMapping($symbol);
 
@@ -99,22 +95,15 @@ class MarketData
         try {
             $accessToken = $this->getAccessToken();
 
-            $params = [
-                'Uic' => $map->saxo_uic,
-                'AssetType' => $map->saxo_asset_type,
-                'Horizon' => $horizon,
-                'Count' => $count,
-                'FieldGroups' => 'Data',
-            ];
-
-            if ($time !== null) {
-                $params['Time'] = $time;
-                $params['Mode'] = $mode ?? 'UpTo';
-            }
-
             $resp = Http::withToken($accessToken)
-                //->get(config('services.saxo.base_url') . '/chart/v1/charts', [
-                ->get(rtrim(config('services.saxo.base_url'), '/') . '/chart/v3/charts', $params);
+                ->get(config('services.saxo.base_url') . '/chart/v1/charts', [
+                    'Uic'         => $map->saxo_uic,
+                    'AssetType'   => $map->saxo_asset_type,
+                    'Horizon'     => $horizon,
+                    'Count'       => $count,
+                    'Time'        => now('UTC')->toIso8601String(),
+                    'FieldGroups' => 'Data',
+                ]);
 
             if (!$resp->successful()) {
                 Log::channel('saxo')->warning('Chart request failed', [
@@ -205,7 +194,6 @@ class MarketData
         return round($volumes->avg(), 2);
     }
 
-    /*
     public function getCurrentVolume(string $symbol): ?float
     {
         $map = $this->getEnabledMapping($symbol);
@@ -218,8 +206,7 @@ class MarketData
             $accessToken = $this->getAccessToken();
 
             $resp = Http::withToken($accessToken)
-                //->get(config('services.saxo.base_url') . '/trade/v1/infoprices', [
-                ->get(rtrim(config('services.saxo.base_url'), '/') . '/trade/v1/infoprices', [
+                ->get(config('services.saxo.base_url') . '/trade/v1/infoprices', [
                     'Uic'       => $map->saxo_uic,
                     'AssetType' => $map->saxo_asset_type,
                 ]);
@@ -243,37 +230,6 @@ class MarketData
             ]);
             return null;
         }
-    }
-    */
-
-    public function getCurrentVolume(string $symbol): ?float
-    {
-       $bars = $this->getChartData($symbol, 5, 3);
-       if (empty($bars)) {
-           return null;
-       }
-       $lastBar = collect($bars)->last();
-       if (!is_array($lastBar)) {
-           return null;
-       }
-       return isset($lastBar['Volume']) ? (float) $lastBar['Volume'] : null;
-    }
-
-    public function getAverageIntradayBarVolume(string $symbol, int $count = 50): ?float
-    {
-       $bars = $this->getChartData($symbol, 5, $count);
-       if (empty($bars)) {
-           return null;
-       }
-       $volumes = collect($bars)
-           ->pluck('Volume')
-           ->filter(fn ($v) => $v !== null)
-           ->map(fn ($v) => (float) $v)
-           ->values();
-       if ($volumes->isEmpty()) {
-           return null;
-       }
-       return round($volumes->avg(), 2);
     }
 
     public function getIntradayHigh(string $symbol): ?float
