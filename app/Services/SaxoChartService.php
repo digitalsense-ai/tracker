@@ -41,7 +41,7 @@ class SaxoChartService
                      ->get(rtrim(config('services.saxo.base_url'), '/') . '/chart/v3/charts', [
                          'Uic'       => $uic,
                          'AssetType' => $assetType, // "Stock"
-                         'Horizon'   => 1440,       // daily
+                         'Horizon'   => 1440,       // daily - 24hours * 60mins
                          'Count'     => $count,     // <= 1200
                          'FieldGroups' => 'Data',   // optional (default is [Data])
                      ]);

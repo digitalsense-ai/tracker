@@ -1,4 +1,6 @@
 <?php
+use App\Http\Controllers\TestSampleController;
+
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExplainerController;
 use App\Http\Controllers\TradeResultController;
@@ -23,6 +25,7 @@ use App\Http\Controllers\TradeReviewController;
 use App\Http\Controllers\FeedbackSummaryController;
 
 //use App\Models\AiModel;
+Route::get('/testsample/bar', [TestSampleController::class, 'index'])->name('testsample.bar');
 
 Route::get('/', function () {
     return redirect('/dashboard');

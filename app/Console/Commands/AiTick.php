@@ -37,7 +37,7 @@ class AiTick extends Command
                // ------------------------------
                // 1) Respect check interval
                // ------------------------------           
-               $interval = $model->check_interval
+               $interval = $model->check_interval_min
                     ?? $model->check_interval_min
                     ?? 1;
 
