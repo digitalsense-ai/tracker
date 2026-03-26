@@ -30,50 +30,101 @@ class AiReviewTrades extends Command
        $this->info('Done.');
        return self::SUCCESS;
    }
-   protected function reviewTrade(Trade $trade): void
-   {
-       $symbol = strtoupper($trade->symbol ?? $trade->ticker ?? '');
+
+    protected function reviewTrade(Trade $trade): void
+    {
+       $symbol = strtoupper(trim($trade->symbol ?? $trade->ticker ?? ''));
        $openedAt = $trade->opened_at ? Carbon::parse($trade->opened_at) : null;
        $closedAt = $trade->closed_at ? Carbon::parse($trade->closed_at) : null;
        $plan = AiDailyPlan::query()
            ->where('ai_model_id', $trade->ai_model_id)
-           ->whereDate('trade_date', optional($openedAt)->toDateString())
+           ->when($openedAt, fn ($q) => $q->whereDate('trade_date', $openedAt->toDateString()))
            ->latest('id')
            ->first();
        $planItems = collect(data_get($plan, 'plan_json', []))
            ->filter(fn ($item) => (bool) ($item['approved'] ?? true))
            ->values();
        $planAligned = $planItems->contains(function ($item) use ($symbol) {
-           $sym = strtoupper($item['symbol'] ?? $item['ticker'] ?? '');
+           $sym = strtoupper(trim($item['symbol'] ?? $item['ticker'] ?? ''));
            return $sym === $symbol;
        });
        $planItem = $planItems->first(function ($item) use ($symbol) {
-           $sym = strtoupper($item['symbol'] ?? $item['ticker'] ?? '');
+           $sym = strtoupper(trim($item['symbol'] ?? $item['ticker'] ?? ''));
            return $sym === $symbol;
        });
-       $logs = ModelLog::query()
+       /*
+       |--------------------------------------------------------------------------
+       | Entry / Exit logs
+       |--------------------------------------------------------------------------
+       | Only use real decision-like actions.
+       | Exclude noisy actions such as:
+       | - SCANNER_CANDIDATES
+       | - PREMARKET_PLAN
+       | - OPEN_POSITION_PRICE
+       | - TICK_TOKEN_DEBUG
+       |--------------------------------------------------------------------------
+       */
+       $entryLogs = ModelLog::query()
            ->where('ai_model_id', $trade->ai_model_id)
-           ->when($openedAt, fn ($q) => $q->where('created_at', '>=', $openedAt->copy()->subMinutes(30)))
-           ->when($closedAt, fn ($q) => $q->where('created_at', '<=', $closedAt->copy()->addMinutes(30)))
+           ->whereIn('action', ['OPEN', 'HOLD'])
+           ->when($openedAt, fn ($q) => $q->where('created_at', '>=', $openedAt->copy()->subHours(2)))
+           ->when($openedAt, fn ($q) => $q->where('created_at', '<=', $openedAt->copy()->addHours(2)))
            ->orderBy('created_at')
            ->get();
-       $entryLog = $logs->first(function ($log) use ($symbol) {
-           $payload = is_array($log->payload) ? $log->payload : [];
-           $decision = $payload['decision'] ?? [];
-           $orders = $decision['orders'] ?? [];
-           foreach ($orders as $order) {
-               if (strtoupper($order['symbol'] ?? '') === $symbol) {
-                   return true;
-               }
-           }
-           return false;
+       $exitLogs = ModelLog::query()
+           ->where('ai_model_id', $trade->ai_model_id)
+           ->whereIn('action', ['CLOSE', 'HOLD'])
+           ->when($closedAt, fn ($q) => $q->where('created_at', '>=', $closedAt->copy()->subHours(2)))
+           ->when($closedAt, fn ($q) => $q->where('created_at', '<=', $closedAt->copy()->addHours(2)))
+           ->orderBy('created_at')
+           ->get();
+       // Best case: exact order-symbol match in an OPEN log
+       $entryLog = $entryLogs->first(function ($log) use ($symbol) {
+           return $this->modelLogMatchesSymbol($log, $symbol);
        });
-       $strategy = $this->extractStrategy($trade, $entryLog, $planItem);
-       $regimeAtEntry = $this->extractRegime($entryLog);
-       $regimeAtExit = $this->extractExitRegime($logs);
+       // Fallback: nearest OPEN log by time
+       if (!$entryLog && $openedAt) {
+           $entryLog = $entryLogs
+               ->where('action', 'OPEN')
+               ->sortBy(fn ($log) => abs($log->created_at->diffInSeconds($openedAt, false)))
+               ->first();
+       }
+       // Last fallback: nearest HOLD log by time
+       if (!$entryLog && $openedAt) {
+           $entryLog = $entryLogs
+               ->where('action', 'HOLD')
+               ->sortBy(fn ($log) => abs($log->created_at->diffInSeconds($openedAt, false)))
+               ->first();
+       }
+       // Best case: exact order-symbol match in a CLOSE log
+       $exitLog = $exitLogs->first(function ($log) use ($symbol) {
+           return $this->modelLogMatchesSymbol($log, $symbol);
+       });
+       // Fallback: nearest CLOSE log by time
+       if (!$exitLog && $closedAt) {
+           $exitLog = $exitLogs
+               ->where('action', 'CLOSE')
+               ->sortBy(fn ($log) => abs($log->created_at->diffInSeconds($closedAt, false)))
+               ->first();
+       }
+       // Last fallback: nearest HOLD log by time
+       if (!$exitLog && $closedAt) {
+           $exitLog = $exitLogs
+               ->where('action', 'HOLD')
+               ->sortBy(fn ($log) => abs($log->created_at->diffInSeconds($closedAt, false)))
+               ->first();
+       }
+       $reviewIncomplete = !$entryLog;
+       $strategy = $trade->strategy
+           ?? $this->extractStrategyFromLog($entryLog)
+           ?? data_get($planItem, 'strategy');
+       $regimeAtEntry = $this->extractRegimeFromLog($entryLog);
+       $regimeAtExit = $this->extractRegimeFromLog($exitLog);
        $distanceToEntryPct = $this->calculateDistanceToEntryPct($trade, $planItem);
        $rewardRisk = $this->calculateRewardRisk($trade, $planItem);
-       $relativeVolume = (float) data_get($entryLog?->payload, 'state_snapshot.watchlist.0.relative_volume', 0);
+       $relativeVolume = (float) (
+           $this->extractWatchValue($entryLog, $symbol, 'relative_volume') ?? 0
+       );
        $regimeMismatch = $this->isRegimeMismatch($strategy, $regimeAtEntry);
        $entryScore = 10;
        if (! $planAligned) $entryScore -= 4;
@@ -81,6 +132,7 @@ class AiReviewTrades extends Command
        if ($relativeVolume > 0 && $relativeVolume < 1.0) $entryScore -= 1;
        if ($regimeMismatch) $entryScore -= 2;
        if ($rewardRisk > 0 && $rewardRisk < 1.5) $entryScore -= 2;
+       if ($reviewIncomplete) $entryScore -= 2;
        $entryScore = max(0, min(10, $entryScore));
        $invalidatedButHeld = false;
        $lateExit = false;
@@ -91,10 +143,14 @@ class AiReviewTrades extends Command
        if ($gaveBackLargeProfit) $exitScore -= 2;
        $exitScore = max(0, min(10, $exitScore));
        $tradeShouldHaveBeenHold = $entryScore < 8;
+       $netPnl = (float) ($trade->net_pnl ?? $trade->pnl ?? 0);
+       $rMultiple = $this->calculateRMultiple($trade);
        $failureReason = null;
        $improvementAction = 'no_change';
-       $netPnl = (float) ($trade->net_pnl ?? $trade->pnl ?? 0);
-       if ($netPnl >= 0) {
+       if ($reviewIncomplete) {
+           $failureReason = 'missing_entry_context';
+           $improvementAction = 'improve_logging_linkage';
+       } elseif ($netPnl >= 0) {
            $failureReason = null;
            $improvementAction = 'no_change';
        } elseif (! $planAligned) {
@@ -116,7 +172,35 @@ class AiReviewTrades extends Command
            $failureReason = 'normal_loss';
            $improvementAction = 'no_change';
        }
-       $rMultiple = $this->calculateRMultiple($trade);
+       // dd([
+       //         'ai_model_id' => $trade->ai_model_id,
+       //         'symbol' => $symbol,
+       //         'strategy' => $strategy,
+       //         'regime_at_entry' => $regimeAtEntry,
+       //         'regime_at_exit' => $regimeAtExit,
+       //         'plan_aligned' => $planAligned,
+       //         'should_have_opened' => $entryScore >= 8,
+       //         'should_have_closed_earlier' => $invalidatedButHeld,
+       //         'entry_quality_score' => $entryScore,
+       //         'exit_quality_score' => $exitScore,
+       //         'failure_reason' => $failureReason,
+       //         'improvement_action' => $improvementAction,
+       //         'r_multiple' => $rMultiple,
+       //         'net_pnl' => $netPnl,
+       //         'review_payload' => [
+       //             'entry_log_found' => (bool) $entryLog,
+       //             'exit_log_found' => (bool) $exitLog,
+       //             'review_incomplete' => $reviewIncomplete,
+       //             'entry_log_id' => $entryLog?->id,
+       //             'exit_log_id' => $exitLog?->id,
+       //             'distance_to_entry_pct' => $distanceToEntryPct,
+       //             'relative_volume' => $relativeVolume,
+       //             'reward_risk' => $rewardRisk,
+       //             'regime_mismatch' => $regimeMismatch,
+       //             'plan_item' => $planItem,
+       //         ],
+       //         'review_source' => 'rule_engine',
+       //     ]);
        TradeReview::updateOrCreate(
            ['trade_id' => $trade->id],
            [
@@ -135,6 +219,11 @@ class AiReviewTrades extends Command
                'r_multiple' => $rMultiple,
                'net_pnl' => $netPnl,
                'review_payload' => [
+                   'entry_log_found' => (bool) $entryLog,
+                   'exit_log_found' => (bool) $exitLog,
+                   'review_incomplete' => $reviewIncomplete,
+                   'entry_log_id' => $entryLog?->id,
+                   'exit_log_id' => $exitLog?->id,
                    'distance_to_entry_pct' => $distanceToEntryPct,
                    'relative_volume' => $relativeVolume,
                    'reward_risk' => $rewardRisk,
@@ -144,32 +233,106 @@ class AiReviewTrades extends Command
                'review_source' => 'rule_engine',
            ]
        );
-   }
-   protected function extractStrategy(Trade $trade, ?ModelLog $entryLog, ?array $planItem): ?string
-   {
-       return $trade->strategy
-           ?? data_get($entryLog?->payload, 'decision.strategy')
-           ?? data_get($planItem, 'strategy');
-   }
-   protected function extractRegime(?ModelLog $entryLog): ?string
-   {
-       $payload = $entryLog?->payload ?? [];
-       if (!is_array($payload)) {
+    }
+
+    protected function modelLogMatchesSymbol(ModelLog $log, string $symbol): bool
+    {
+       $payload = is_array($log->payload) ? $log->payload : [];
+       $possibleOrderPaths = [
+           data_get($payload, 'decision.orders', []),
+           data_get($payload, 'orders', []),
+           data_get($payload, 'response.orders', []),
+       ];
+       foreach ($possibleOrderPaths as $orders) {
+           if (!is_array($orders)) {
+               continue;
+           }
+           foreach ($orders as $order) {
+               $orderSymbol = strtoupper(trim($order['symbol'] ?? $order['ticker'] ?? ''));
+               if ($orderSymbol === strtoupper(trim($symbol))) {
+                   return true;
+               }
+           }
+       }
+       return false;
+    }
+    protected function extractStrategyFromLog(?ModelLog $log): ?string
+    {
+        if (!$log) {
+            return null;
+        }
+
+        $payload = is_array($log->payload) ? $log->payload : [];
+
+        $strategy = data_get($payload, 'decision.strategy', data_get($payload, 'strategy'));
+
+        if (is_array($strategy)) {
+            return $strategy['name'] ?? null;
+        }
+
+        return is_string($strategy) ? $strategy : null;
+    }
+    protected function extractRegimeFromLog(?ModelLog $log): ?string
+    {
+       if (!$log) {
            return null;
        }
+       $payload = is_array($log->payload) ? $log->payload : [];
        return data_get($payload, 'state_snapshot.market_context.trend')
-           ?? data_get($payload, 'state_snapshot.watchlist.0.regime_hint');
-   }
-   protected function extractExitRegime($logs): ?string
-   {
-       $last = $logs->last();
-       $payload = $last?->payload ?? [];
-       if (!is_array($payload)) {
+           ?? data_get($payload, 'state.market_context.trend')
+           ?? data_get($payload, 'state_snapshot.watchlist.0.regime_hint')
+           ?? data_get($payload, 'state.watchlist.0.regime_hint');
+    }
+    protected function extractWatchValue(?ModelLog $log, string $symbol, string $key): mixed
+    {
+       if (!$log) {
            return null;
        }
-       return data_get($payload, 'state_snapshot.market_context.trend')
-           ?? data_get($payload, 'state_snapshot.watchlist.0.regime_hint');
-   }
+       $payload = is_array($log->payload) ? $log->payload : [];
+       $watchlists = [
+           data_get($payload, 'state_snapshot.watchlist', []),
+           data_get($payload, 'state.watchlist', []),
+           data_get($payload, 'watchlist', []),
+       ];
+       foreach ($watchlists as $watchlist) {
+           if (!is_array($watchlist)) {
+               continue;
+           }
+           foreach ($watchlist as $item) {
+               $ticker = strtoupper(trim($item['ticker'] ?? $item['symbol'] ?? ''));
+               if ($ticker === strtoupper(trim($symbol))) {
+                   return $item[$key] ?? null;
+               }
+           }
+       }
+       return null;
+    }
+
+   // protected function extractStrategy(Trade $trade, ?ModelLog $entryLog, ?array $planItem): ?string
+   // {
+   //     return $trade->strategy
+   //         ?? data_get($entryLog?->payload, 'decision.strategy')
+   //         ?? data_get($planItem, 'strategy');
+   // }
+   // protected function extractRegime(?ModelLog $entryLog): ?string
+   // {
+   //     $payload = $entryLog?->payload ?? [];
+   //     if (!is_array($payload)) {
+   //         return null;
+   //     }
+   //     return data_get($payload, 'state_snapshot.market_context.trend')
+   //         ?? data_get($payload, 'state_snapshot.watchlist.0.regime_hint');
+   // }
+   // protected function extractExitRegime($logs): ?string
+   // {
+   //     $last = $logs->last();
+   //     $payload = $last?->payload ?? [];
+   //     if (!is_array($payload)) {
+   //         return null;
+   //     }
+   //     return data_get($payload, 'state_snapshot.market_context.trend')
+   //         ?? data_get($payload, 'state_snapshot.watchlist.0.regime_hint');
+   // }
    protected function calculateDistanceToEntryPct(Trade $trade, ?array $planItem): float
    {
        $entryPrice = (float) ($trade->entry_price ?? 0);

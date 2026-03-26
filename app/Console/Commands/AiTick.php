@@ -97,6 +97,7 @@ class AiTick extends Command
                        'target_price'  => $p->target_price !== null ? (float) $p->target_price : null,
                        'unrealized_pnl'=> $p->unrealized_pnl !== null ? (float) $p->unrealized_pnl : null,
                        'opened_at'     => optional($p->opened_at)->toIso8601String(),
+                       'strategy' => $p->strategy ?? null,
                    ];
                })->values()->all();
                // Normalize recent trades
@@ -138,6 +139,39 @@ class AiTick extends Command
                    }
                 }  
 
+                $openSymbols = collect($openPositionsState)
+                   ->pluck('symbol')
+                   ->map(fn ($s) => strtoupper($s))
+                   ->filter()
+                   ->values();
+                $plannedSymbols = collect($dailyPlan)
+                   ->map(fn ($s) => strtoupper($s['symbol'] ?? $s['ticker'] ?? ''))
+                   ->filter()
+                   ->values();
+                $missingOpenSymbols = $openSymbols->diff($plannedSymbols)->values();
+                foreach ($missingOpenSymbols as $sym) {
+                   $position = collect($openPositionsState)->first(function ($p) use ($sym) {
+                       return strtoupper($p['symbol'] ?? '') === $sym;
+                   });
+                   if (!$position) {
+                       continue;
+                   }
+                   $dailyPlan[] = [
+                       'symbol' => $sym,
+                       'approved' => true,
+                       'status' => 'approved',
+                       'mode' => 'open_position_context',
+                       'strategy' => $position['strategy'] ?? 'existing_position',
+                       'direction' => strtoupper($position['side'] ?? '') === 'LONG' ? 'long' : 'short',
+                       'entry_zone_low' => $position['avg_price'] ?? null,
+                       'entry_zone_high' => $position['avg_price'] ?? null,
+                       'stop_loss' => $position['stop_price'] ?? null,
+                       'take_profit' => $position['target_price'] ?? null,
+                       'invalid_level' => $position['stop_price'] ?? null,
+                       'notes' => 'Synthetic plan item created from open position context',
+                   ];
+                }
+
                 // Allowed symbols = open positions OR approved daily plan
                 // $allowedSymbols = collect($openPositionsState)->pluck('symbol')
                 //     ->merge(collect($dailyPlan)->pluck('symbol'))
@@ -168,18 +202,18 @@ class AiTick extends Command
                     // Cache key per symbol
                     $cacheKey = "price_prev_{$ticker}";
                     // Get previous price (null if not exists)
-                    $prevPrice = Cache::get($cacheKey);
+                    $prevPrice = Cache::get($cacheKey, null);
 
                     if ($ticker && !isset($prices[$ticker])) {
                         $currentPrice = (float) $marketData->getPrice($ticker);
 
                         $prices[$ticker] = [
                             'last' => $currentPrice,
-                            'prev' => $prevPrice
+                            'prev' => ($prevPrice !== null && $prevPrice > 0) ? $prevPrice : null,
                         ];
                         
                         // Update cache for next iteration
-                        Cache::put($cacheKey, $currentPrice, now()->addMinutes($interval + 5));
+                        Cache::put($cacheKey, $currentPrice, now()->addMinutes($interval + 10));                           
                     }
                 }
 
@@ -194,18 +228,18 @@ class AiTick extends Command
                         // Cache key per symbol
                         $cacheKey = "price_prev_{$ticker}";
                         // Get previous price (null if not exists)
-                        $prevPrice = Cache::get($cacheKey);
+                        $prevPrice = Cache::get($cacheKey, null);
 
                         if (!isset($prices[$ticker])) {
                             $currentPrice = (float) $marketData->getPrice($ticker);
 
                             $prices[$ticker] = [
                                 'last' => $currentPrice,
-                                'prev' => $prevPrice
+                                'prev' => ($prevPrice !== null && $prevPrice > 0) ? $prevPrice : null,
                             ];
 
                             // Update cache for next iteration
-                            Cache::put($cacheKey, $currentPrice, now()->addMinutes($interval + 5));
+                            Cache::put($cacheKey, $currentPrice, now()->addMinutes($interval + 10));                            
                         }
                     }
                 }
@@ -281,10 +315,17 @@ class AiTick extends Command
                 }
                 // realized PnL from trades closed today
                 foreach ($recentTrades as $t) {
-                    $tradeDate = Carbon::parse($t->opened_at)->toDateString();
-                    if ($tradeDate === $now->toDateString()) {
-                        $dayPnl += $t->net_pnl ?? 0;
-                    }
+                    // $tradeDate = Carbon::parse($t->opened_at)->toDateString();
+                    // if ($tradeDate === $now->toDateString()) {
+                    //     $dayPnl += $t->net_pnl ?? 0;
+                    // }
+
+                    $realizedDate = !empty($t->closed_at)
+                       ? Carbon::parse($t->closed_at)->toDateString()
+                       : null;
+                   if ($realizedDate === $now->toDateString()) {
+                       $dayPnl += $t->net_pnl ?? 0;
+                   }
                 }
 
                 // 3️ Compute drawdown % from start equity
@@ -340,12 +381,12 @@ class AiTick extends Command
                        : 0;
 
                     // Simple regime hint
-                    if ($dayChangePct > 1 && $distanceToEntryPct < 1) {
-                        $regimeHint = 'breakout';
-                    } elseif ($dayChangePct < -1) {
-                        $regimeHint = 'pullback';
+                    if ($dayChangePct > 1 && $distanceToEntryPct < 1 && $distanceToVWAPPct > -0.3) {
+                       $regimeHint = 'breakout';
+                    } elseif ($dayChangePct < -1 || $distanceToVWAPPct <= -0.5) {
+                       $regimeHint = 'pullback';
                     } else {
-                        $regimeHint = 'neutral';
+                       $regimeHint = 'neutral';
                     }
 
                     $prevLoopPrice = $priceData['prev'] ?? null;
