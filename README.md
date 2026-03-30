@@ -1,490 +1,728 @@
-# 📊 AI Trading Tracker
+# Tracker
+**Version: 0.9.0-beta**
 
-A Laravel-based AI trading engine for **intraday strategy execution, simulation, and decision automation**.
+Tracker is a Laravel-based trading research and operations platform for strategy development, simulation, monitoring, model workflows, performance analysis, and review.
 
-This system combines:
+It brings together the major parts of a trading system into one application:
 
-* AI-generated trade plans
-* Real-time decision loops
-* Structured state management
-* Paper trading execution
-* Full logging and evaluation
+- strategy configuration
+- signal exploration
+- backtesting and simulation
+- results and KPI analysis
+- model and prompt workflows
+- kanban-based planning and review
+- profiles and leaderboard comparisons
+- trade reviews and feedback summaries
+- live monitoring
+- broker integration entry points
 
----
-
-# 🚀 Overview
-
-The system runs a **model-driven trading workflow**:
-
-1. Pre-market generates a daily plan (`AiDailyPlan`)
-2. Approved ideas become tradable (lane 3)
-3. `ai:tick` runs on interval
-4. AI evaluates current state
-5. Decisions are parsed and executed via paper trading
+Tracker is no longer best described as only a single AI trading loop.  
+It is better understood as a broader platform for building, observing, reviewing, and improving trading systems.
 
 ---
 
-# 🧠 Core Flow
+## Vision
+
+The purpose of Tracker is to provide a single workspace where trading logic, system behavior, and outcomes can be managed end to end.
+
+Instead of splitting this work across scripts, spreadsheets, dashboards, notes, and broker tools, Tracker aims to keep the workflow in one place.
+
+The platform is intended to support both:
+
+- **systematic trading workflows**, where signals, rules, and simulations are central
+- **model-assisted workflows**, where AI models, prompts, logs, and structured review are part of the process
+
+At a practical level, Tracker is built to help answer questions like:
+
+- What strategy settings are active right now?
+- What signals or opportunities are appearing?
+- How has the strategy performed historically?
+- What is the current win rate, average R, and net result?
+- Which model or profile is performing best?
+- What happened in a specific trade?
+- What patterns appear in feedback and review?
+- Is the system healthy and operational?
+- Are broker connections and integrations ready?
+
+---
+
+## System Overview
+
+Tracker is designed around several connected layers.
+
+### 1. Market data layer
+This layer is responsible for supplying market prices, candles, and market/session-aware data to the rest of the platform.
+
+Expected responsibilities:
+- fetch and normalize market data
+- support one or more data providers
+- handle ticker and symbol formatting
+- support session logic and market timing
+- feed dashboards, signals, backtests, and live views
+
+### 2. Strategy and signal layer
+This layer turns strategy definitions and market data into candidate setups and signals.
+
+Expected responsibilities:
+- define configurable strategy rules
+- support breakout/retest and similar logic
+- apply filters and confirmation rules
+- generate candidate signals
+- expose setup information to UI and simulations
+
+### 3. Simulation and backtest layer
+This layer evaluates strategy behavior historically and stores trade outcomes.
+
+Expected responsibilities:
+- replay strategy logic on historical data
+- simulate entries, exits, stops, and targets
+- account for fees and slippage assumptions
+- calculate PnL and R-multiples
+- support parameter tuning and iteration
+
+### 4. Results and analytics layer
+This layer turns stored trade data into useful reporting.
+
+Expected responsibilities:
+- filter historical or simulated trades
+- calculate KPIs such as win rate, average R, and net profit
+- support exports and reporting views
+- power trade results and summary pages
+
+### 5. Model and workflow layer
+This layer manages models, prompts, logs, and workflow surfaces.
+
+Expected responsibilities:
+- manage model entities and settings
+- expose prompts and model logs
+- support model-specific chats and inspection
+- support kanban-style workflow tracking
+- make model behavior easier to compare and improve
+
+### 6. Review and feedback layer
+This layer handles the learning loop after trades and simulations.
+
+Expected responsibilities:
+- review completed trades
+- summarize feedback patterns
+- support retrospective analysis
+- help improve strategy and model behavior over time
+
+### 7. Live monitoring and integration layer
+This layer supports operational monitoring and future broker-connected workflows.
+
+Expected responsibilities:
+- show live or near-live system state
+- support operational monitoring
+- surface integration readiness
+- connect to broker authentication and execution infrastructure
+
+---
+
+## How the platform fits together
+
+A simple mental model for Tracker is:
 
 ```text
-Pre-market → AiDailyPlan
-→ Approved plan (lane 3)
-→ ai:tick
-→ Build STATE
-→ loop_min_price_move_pct filter
-→ OpenAI (LLM)
-→ AiDecisionParser
-→ Qty validation / clamp
-→ PaperBroker
-→ Positions / Trades / Logs / EquitySnapshot
-```
+Market Data
+  ↓
+Strategy Rules / Signal Logic
+  ↓
+Backtest / Simulation / Candidate Trades
+  ↓
+Trade Storage / KPIs / Results
+  ↓
+Model Workflows / Reviews / Feedback
+  ↓
+Dashboards / Live Monitoring / Comparison
+  ↓
+Broker Integration / Future Execution
+````
+
+This matters because Tracker is not only about generating trades.
+
+It is also about understanding:
+
+* why a setup appeared
+* how it performed
+* how it compares with alternatives
+* whether the system is healthy
+* what should be improved next
+
+That makes Tracker both an **analysis platform** and an **operations platform**.
 
 ---
 
-# ⚙️ AiTick (Execution Engine)
+## Main product areas
 
-`ai:tick` is the core runtime.
+### Dashboard and status
 
-Each cycle:
+These pages provide a high-level view of system behavior and health.
 
-* loads open positions and recent trades
-* loads approved daily plan
-* builds a rich `STATE`
-* skips if market hasn’t moved enough
-* calls OpenAI
-* parses decision
-* validates quantity
-* executes via `PaperBroker`
-* logs result and snapshots equity
+Purpose:
 
----
+* show operational status
+* expose strategy configuration
+* help identify issues quickly
+* provide a starting point for navigating the platform
 
-# 📦 STATE Object
+Routes include:
 
-The AI receives a structured `STATE` JSON.
+* `/dashboard`
+* `/status`
 
-## Key fields
+### KPI and trade results
 
-```json
-{
-  "time": "...",
-  "session": {},
-  "model": {},
-  "account": {},
-  "open_positions": [],
-  "prices": {},
-  "daily_plan": {},
-  "watchlist": [],
-  "market_context": {},
-  "recent_actions": []
-}
-```
+These pages support performance analysis and reporting.
 
----
+Purpose:
 
-## session
+* inspect historical or simulated trades
+* filter by date, ticker, or status
+* calculate win rate, average R, fees, and net result
+* export result data
 
-```json
-{
-  "market": "US",
-  "phase": "premarket|intraday|close",
-  "minutes_since_open": 42
-}
-```
+Routes include:
 
----
+* `/kpi`
+* `/results`
 
-## model
+### Backtest and signals
 
-Execution rules:
+These pages support research, validation, and idea exploration.
 
-* check_interval_min
-* loop_min_price_move_pct
-* per_trade_alloc_pct
-* max_exposure_pct
-* max_drawdown_pct
-* max_concurrent_trades
-* cooldown_minutes
-* max_adds_per_position
+Purpose:
 
----
+* inspect strategy behavior
+* review candidate trade opportunities
+* evaluate whether signal logic is behaving correctly
+* connect idea generation to measurable outcomes
 
-## account
+Routes include:
 
-```json
-{
-  "equity": 100000,
-  "cash": 76000,
-  "used_exposure_pct": 18.5,
-  "day_pnl": 420.25,
-  "drawdown_pct": 1.1
-}
-```
+* `/backtest`
+* `/signals`
 
----
+### Explainer surfaces
 
-## daily_plan
+These pages appear intended to make system behavior more understandable.
 
-```json
-{
-  "trade_date": "2026-03-20",
-  "lane": 3,
-  "approved_symbols": ["AAPL", "NVDA"],
-  "items": []
-}
-```
+Purpose:
 
----
+* explain process flow
+* support onboarding and debugging
+* improve transparency around strategy or model behavior
 
-## watchlist (core execution layer)
+Routes include:
 
-Each symbol includes:
+* `/explainer`
+* `/explainer-flow`
 
-* ticker
-* last
-* change_from_prev_loop_pct
-* day_change_pct
-* distance_to_entry_pct
-* distance_to_vwap_pct
-* relative_volume
-* intraday_range_pct
-* regime_hint
+### Settings and configuration
 
-### Sizing fields
+This area centralizes application and strategy-related configuration.
 
-* entry_reference
-* base_trade_budget
-* max_qty
-* allowed_size_multipliers
+Purpose:
 
----
+* manage settings
+* control runtime behavior
+* support environment and strategy adjustments
 
-# 🧠 AI Decision Contract
+Routes include:
 
-The AI must return **pure JSON only**.
+* `/settings`
 
-```json
-{
-  "action": "OPEN|CLOSE|HOLD",
-  "strategy": "short description",
-  "reasoning": "brief explanation",
-  "orders": []
-}
-```
+### Models
 
----
+The model layer is one of the largest parts of the application.
 
-## Example OPEN
+Purpose:
 
-```json
-{
-  "action": "OPEN",
-  "strategy": "AAPL breakout long",
-  "reasoning": "Strong momentum and plan alignment",
-  "orders": [
-    {
-      "symbol": "AAPL",
-      "side": "BUY",
-      "qty": 20,
-      "type": "MARKET",
-      "stop": 181.5,
-      "target": 185.0
-    }
-  ]
-}
-```
+* manage model entities
+* compare variants
+* expose model-specific pages and workflows
+* support iteration and transparency around model behavior
 
----
+Routes include:
 
-## Example HOLD
+* `/models`
+* `/models/create`
+* `/models/{model}/edit`
+* `/models/{slug}`
 
-```json
-{
-  "action": "HOLD",
-  "strategy": "hold_existing",
-  "reasoning": "No high-quality setup",
-  "orders": []
-}
-```
+### Model workflow surfaces
 
----
+These surfaces provide deeper visibility and process control for each model.
 
-# 🧩 Prompt Architecture
+Purpose:
 
-| Phase      | Purpose              |
-| ---------- | -------------------- |
-| Pre-market | Build daily playbook |
-| Start      | Validate at open     |
-| Loop       | Execute trades       |
+* inspect logs and prompts
+* interact with model-specific views
+* track work in kanban stages
+* support debugging and refinement
 
-👉 Current runtime is **loop-driven using approved plans**
+Routes include:
 
----
+* `/models/{slug}/kanban`
+* `/models/{slug}/kanban-v2`
+* `/models/{slug}/chat`
+* `/models/{slug}/log`
+* `/models/{slug}/prompt/{prompt}`
 
-# ✍️ Prompt Examples
+### Profiles and leaderboard
 
-## 🔹 System Prompt (CORE)
+These areas support comparison between profiles, models, or configurations.
 
-```text
-You are an autonomous trading agent managing a single paper trading account.
+Purpose:
 
-You receive a STATE JSON object.
-Use STATE as the single source of truth.
+* rank performance
+* compare variants
+* observe stronger and weaker approaches
+* organize multiple strategy identities
 
-Your job is to return exactly one decision:
-OPEN, CLOSE, or HOLD.
+Routes include:
 
-Rules:
-- Only trade symbols in state.allowed_symbols
-- Only open trades in state.daily_plan.approved_symbols
-- Never open a symbol already in open_positions
-- Always define stop and target
-- Never exceed watchlist.max_qty
-- Use allowed_size_multipliers
-- If uncertain → HOLD
+* `/profiles/leaderboard`
+* `/profiles/{slug}`
+* `/leaderboard`
 
-Return ONLY JSON.
-```
+### Live monitoring
+
+This is the operational runtime layer.
+
+Purpose:
+
+* observe current platform state
+* bridge analysis and live monitoring
+* support future real-time workflows
+
+Routes include:
+
+* `/live`
+
+### Trade review and feedback
+
+This is the post-trade learning layer.
+
+Purpose:
+
+* inspect completed trades
+* review outcomes in detail
+* summarize recurring strengths and weaknesses
+* build a continuous improvement loop
+
+Routes include:
+
+* `/trade-reviews`
+* `/trade-reviews/{tradeReview}`
+* `/feedback-summaries`
+* `/feedback-summaries/{aiModel}`
+
+### Broker integration
+
+This is the system boundary between internal workflows and external broker infrastructure.
+
+Purpose:
+
+* support broker authentication
+* prepare for account and execution connectivity
+* bridge internal logic with external APIs
+
+Routes include:
+
+* `/saxo/login`
+* `/saxo/callback`
 
 ---
 
-## 🔹 Loop Prompt
+## What is already confirmed in the current codebase
 
-```text
-On each tick:
+Several parts of the system are already clearly visible in the repository.
 
-1. Review open_positions
-- Close if stop, target, or invalidation is hit
-- Close if thesis no longer valid
+### Trade results
 
-2. Review daily_plan + watchlist
-- Only trade approved symbols
-- Prefer plan-aligned setups
+The results controller works on `simulated_trades`, supports filtering, calculates KPIs, and allows CSV export.
 
-Use:
-- change_from_prev_loop_pct
-- day_change_pct
-- distance_to_entry_pct
-- distance_to_vwap_pct
-- relative_volume
-- intraday_range_pct
-- regime_hint
+This confirms the presence of:
 
-3. OPEN only when:
-- high-quality setup
-- clear regime
-- valid entry/stop/target
-- qty within max_qty
+* stored simulated trades
+* reporting and filtering
+* summary metrics
+* export support
 
-4. Otherwise HOLD
-```
+### KPI analytics
 
----
+The KPI controller calculates:
 
-## 🔹 Pre-Market Prompt
+* total trade rows
+* wins
+* losses
+* closed trades
+* win rate
+* average R
+* net profit
 
-```text
-You are my pre-market strategist.
+This confirms that the performance layer is metric-driven rather than only visual.
 
-Create today's playbook.
+### Status monitoring
 
-Return:
-- approved_symbols
-- setups
-- entry zones
-- invalidation levels
-- targets
-- priority
+The status controller exposes:
 
-Focus on quality over quantity.
-```
+* strategy configuration values
+* datafeed status
+* cron/run status
+* broker readiness notes
 
----
+This confirms the project already includes an operational health layer.
 
-## 🔹 Start Prompt (optional)
+### Strategy configurability
 
-```text
-Validate today's plan at market open.
+The status layer references values such as:
 
-- keep valid setups
-- cancel broken setups
-- confirm active opportunities
-```
+* range minutes
+* entry buffer percent
+* retest requirement
+* stop-loss buffer
+* take-profit levels
+* trailing stop
+* session start/end
+* position size
+* fee settings
+* datafeed settings
+
+This strongly suggests the platform is built around configurable strategy logic.
 
 ---
 
-# 📚 Strategy Playbook Examples
+## Current architecture vs legacy architecture
 
-## 1. ORB Breakout
+Earlier documentation described the project mainly as an AI execution engine with concepts such as:
 
-```json
-{
-  "symbol": "AAPL",
-  "strategy": "orb_breakout",
-  "direction": "LONG",
-  "entry_zone_low": 182.10,
-  "entry_zone_high": 182.80,
-  "invalidation": 181.40,
-  "target_1": 184.50,
-  "target_2": 186.00
-}
-```
+* `AiDailyPlan`
+* `ai:tick`
+* `STATE`
+* `AiDecisionParser`
+* `PaperBroker`
+* prompt-driven `OPEN`, `CLOSE`, and `HOLD` decisions
 
----
+That may still reflect an older or partial layer of the project.
 
-## 2. Momentum
+However, the current repository now exposes a much broader platform surface that includes:
 
-```json
-{
-  "symbol": "NVDA",
-  "strategy": "momentum",
-  "direction": "LONG",
-  "entry_zone_low": 918.00,
-  "entry_zone_high": 922.00,
-  "invalidation": 912.00,
-  "target_1": 935.00
-}
-```
+* dashboards
+* KPI analytics
+* results reporting
+* signals and backtests
+* models and prompts
+* kanban workflows
+* profiles and leaderboards
+* trade reviews
+* feedback summaries
+* live pages
+* broker integration routes
+
+For that reason, Tracker should now be described as a **trading research and operations platform**, not only as a single AI trading loop.
 
 ---
 
-## 3. VWAP Reversion
+## Expected modules in the project
 
-```json
-{
-  "symbol": "TSLA",
-  "strategy": "vwap_reversion",
-  "direction": "SHORT",
-  "entry_zone_low": 171.80,
-  "entry_zone_high": 172.40,
-  "invalidation": 173.20,
-  "target_1": 169.90
-}
-```
+A complete version of Tracker should be expected to include these categories of modules.
 
----
+### Core data modules
 
-## 4. Gap and Go
+* market data services
+* candle/session providers
+* ticker normalization
+* symbol metadata
+* settings/configuration services
 
-```json
-{
-  "symbol": "AMD",
-  "strategy": "gap_and_go",
-  "direction": "LONG",
-  "entry_zone_low": 164.20,
-  "entry_zone_high": 164.90,
-  "invalidation": 163.40,
-  "target_1": 166.80
-}
-```
+### Strategy modules
 
----
+* range detection
+* breakout/retest logic
+* filters and confirmations
+* stop and target calculation
+* signal generation
 
-## 5. Gap Fade
+### Simulation modules
 
-```json
-{
-  "symbol": "META",
-  "strategy": "gap_fade",
-  "direction": "SHORT",
-  "entry_zone_low": 498.00,
-  "entry_zone_high": 499.20,
-  "invalidation": 500.40,
-  "target_1": 493.50
-}
-```
+* backtest engine
+* trade simulator
+* fee handling
+* position sizing
+* trade lifecycle handling
 
----
+### Storage and analytics modules
 
-# 📏 Sizing Logic
+* simulated trades
+* performance snapshots
+* KPI calculations
+* result export
+* reporting queries
 
-AI sees:
+### Model modules
 
-* base_trade_budget
-* entry_reference
-* max_qty
-* allowed_size_multipliers
+* model records
+* model settings
+* prompt management
+* model logs
+* chat/history views
+* kanban workflow surfaces
 
-Backend enforces:
+### Review modules
 
-* qty ≤ max_qty
-* invalid qty → adjusted or HOLD
+* trade review records
+* feedback summaries
+* annotations or reasoning notes
+* evaluation workflows
 
----
+### UI modules
 
-# ⚡ loop_min_price_move_pct
+* dashboard
+* status page
+* results page
+* KPI page
+* backtest page
+* signals page
+* live page
+* explainer pages
+* profile pages
+* leaderboard pages
 
-Before running AI:
+### Integration modules
 
-* compare current price vs last loop
-* if movement < threshold → skip
-
-Benefits:
-
-* avoids noise
-* reduces overtrading
-* saves API cost
+* broker OAuth/authentication
+* broker account connection
+* datafeed selection
+* cron or scheduled processing
+* execution readiness monitoring
 
 ---
 
-# 🧱 Core Components
+## Typical user workflows
 
-| Component        | Role                 |
-| ---------------- | -------------------- |
-| AiTick           | Execution loop       |
-| AiDecisionParser | JSON validation      |
-| PaperBroker      | Trade execution      |
-| ModelLog         | Logging              |
-| EquitySnapshot   | Performance tracking |
-| MarketData       | Price + indicators   |
+### Research workflow
+
+1. Configure strategy or model settings
+2. Inspect signals and setups
+3. Run or review backtests
+4. Examine KPIs and results
+5. Compare profiles or models
+
+### Monitoring workflow
+
+1. Open dashboard and status pages
+2. Review system health
+3. Inspect live monitoring surfaces
+4. Confirm datafeed and scheduling activity
+5. Verify broker integration readiness
+
+### Review workflow
+
+1. Inspect completed or simulated trades
+2. Open review pages
+3. Study feedback summaries
+4. Identify recurring issues or strengths
+5. Refine strategy or model settings
+
+### Model workflow
+
+1. Create or edit a model
+2. Review kanban stage and workflow
+3. Inspect model prompts, logs, and chat
+4. Compare model behavior
+5. Promote stronger variants
 
 ---
 
-# ⚠️ Known Limitations
+## Why this architecture matters
 
-* Only supports OPEN / CLOSE / HOLD
-* No scaling or partial exits yet
-* Strategy logic partly lives in prompts
-* Loop is primary execution engine
+Tracker is valuable not only because it stores trades or shows signals.
+
+Its real strength is that it creates a continuous loop across:
+
+* strategy definition
+* signal generation
+* simulation
+* monitoring
+* analytics
+* review
+* comparison
+* feedback
+* iteration
+
+That makes it much more useful than a standalone script, dashboard, or backtest tool.
+
+Tracker is designed to become a workflow platform for improving trading systems over time.
 
 ---
 
-# 🛠 Setup
+## Tech stack
+
+### Backend
+
+* PHP 8.2
+* Laravel 12
+* Guzzle HTTP client
+
+### Frontend
+
+* Vite
+* Tailwind CSS
+* Alpine.js
+* jQuery
+* lightweight-charts
+
+### Development tooling
+
+The local development workflow is set up to run:
+
+* Laravel dev server
+* queue listener
+* Laravel Pail
+* Vite dev server
+
+This suggests the platform is built for both normal web usage and background/process-driven behavior.
+
+---
+
+## Local setup
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/digitalsense-ai/tracker.git
 cd tracker
+```
 
+Install dependencies:
+
+```bash
 composer install
 npm install
+```
 
+Create the environment file and generate the application key:
+
+```bash
 cp .env.example .env
 php artisan key:generate
+```
 
+Run database migrations:
+
+```bash
 php artisan migrate
-php artisan serve
 ```
 
 ---
 
-# 🧠 Philosophy
+## Run locally
 
-The system works when these align:
+For the standard local development workflow:
 
-* STATE
-* PROMPTS
-* PARSER
-* EXECUTION
+```bash
+composer run dev
+```
 
-👉 This is not just automation
-👉 It is **controlled AI decision-making**
+This starts:
+
+* the Laravel application server
+* the queue listener
+* Laravel Pail log tailing
+* the Vite dev server
+
+You can also run services individually:
+
+```bash
+php artisan serve
+php artisan queue:listen --tries=1
+npm run dev
+```
 
 ---
 
-# 📌 Final Thought
+## Build assets
 
-The strength of this system is:
+```bash
+npm run build
+```
 
-**Structured state + adaptive AI + strict execution rules**
+---
 
-That is what makes it scalable.
+## Run tests
+
+```bash
+composer test
+```
+
+---
+
+## Routing notes
+
+The route layer appears to be under active evolution.
+
+The current routing setup includes:
+
+* many directly registered routes
+* conditionally loaded split route files
+* explicit `require` calls for route fragments
+* debug and health helpers
+* signs of route rescue/refactor history
+
+This suggests the project has grown quickly and may still be consolidating architecture in some places.
+
+---
+
+## Versioning
+
+Suggested current version:
+
+**0.9.0-beta**
+
+Why:
+
+* the platform is already substantial
+* several modules are integrated
+* the architecture is meaningful and operational
+* but there are still visible signs of restructuring and unfinished integration boundaries
+
+Suggested progression:
+
+* `0.9.x` for stabilization and cleanup
+* `1.0.0` when routing, workflows, and integration boundaries are stable
+* `1.1.x+` for more mature live and broker-connected features
+
+---
+
+## Future README improvements
+
+This README can later be expanded with:
+
+* folder structure overview
+* architecture diagram
+* screenshots of major pages
+* environment variable documentation
+* database notes
+* datafeed setup instructions
+* broker integration setup notes
+* deployment instructions
+
+---
+
+## Summary
+
+Tracker is a Laravel-based platform for:
+
+* trading research
+* strategy simulation
+* signal exploration
+* KPI and results analysis
+* model and prompt workflows
+* profile and leaderboard comparison
+* trade review and feedback loops
+* live monitoring
+* broker integration readiness
+
+It should be understood as a **trading research and operations platform** rather than only an AI trading engine.
