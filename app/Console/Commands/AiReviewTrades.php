@@ -127,6 +127,7 @@ class AiReviewTrades extends Command
            $this->extractWatchValue($entryLog, $symbol, 'relative_volume') ?? 0
        );
        $regimeMismatch = $this->isRegimeMismatch($strategy, $regimeAtEntry);
+
        $entryScore = 10;
        if (! $planAligned) $entryScore -= 4;
        if ($distanceToEntryPct > 1.5) $entryScore -= 2;
@@ -139,6 +140,7 @@ class AiReviewTrades extends Command
        $invalidatedButHeld = false;
        $lateExit = false;
        $gaveBackLargeProfit = false;
+
        $exitScore = 10;
        if ($invalidatedButHeld) $exitScore -= 4;
        if ($lateExit) $exitScore -= 3;
@@ -147,6 +149,7 @@ class AiReviewTrades extends Command
        $tradeShouldHaveBeenHold = $entryScore < 8;
        $netPnl = (float) ($trade->net_pnl ?? $trade->pnl ?? 0);       
        $rMultiple = $this->calculateRMultiple($trade, $planItem);
+
        $failureReason = null;
        $improvementAction = 'no_change';
        if ($reviewIncomplete) {
