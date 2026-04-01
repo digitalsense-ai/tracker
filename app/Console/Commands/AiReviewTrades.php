@@ -51,7 +51,7 @@ class AiReviewTrades extends Command
        $planItem = $planItems->first(function ($item) use ($symbol) {
            $sym = strtoupper(trim($item['symbol'] ?? $item['ticker'] ?? ''));
            return $sym === $symbol;
-       });
+       });       
        /*
        |--------------------------------------------------------------------------
        | Entry / Exit logs
@@ -78,6 +78,7 @@ class AiReviewTrades extends Command
            ->when($closedAt, fn ($q) => $q->where('created_at', '<=', $closedAt->copy()->addHours(2)))
            ->orderBy('created_at')
            ->get();
+
        // Best case: exact order-symbol match in an OPEN log
        $entryLog = $entryLogs->first(function ($log) use ($symbol) {
            return $this->modelLogMatchesSymbol($log, $symbol);
@@ -172,6 +173,7 @@ class AiReviewTrades extends Command
            $failureReason = 'normal_loss';
            $improvementAction = 'no_change';
        }
+       // if($trade->id == 637)
        // dd([
        //         'ai_model_id' => $trade->ai_model_id,
        //         'symbol' => $symbol,
