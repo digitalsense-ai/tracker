@@ -71,11 +71,27 @@ class SimulateTrades extends Command
             ->pluck('ticker')
             ->map(fn ($s) => strtoupper($s))
             ->all();
-
-        $maxConcurrent = (int) ($model->max_concurrent_trades ?? 1);
+        
+        $maxConcurrent = max(1, (int) ($model->max_concurrent_trades ?? 1));
         $openCount = count($openSymbols);
         $opened = 0;
         $skipped = 0;
+        
+        if ($openCount >= $maxConcurrent) {
+           $this->info("{$model->name}: max concurrent positions reached ({$openCount}/{$maxConcurrent}), no new entries opened.");
+           ModelLog::create([
+               'ai_model_id' => $model->id,
+               'action' => 'SKIP',
+               'summary' => 'simulate:trades blocked by max concurrent positions',
+               'payload' => [
+                   'source' => 'simulate:trades',
+                   'reason' => 'max_concurrent_reached',
+                   'open_count' => $openCount,
+                   'max_concurrent' => $maxConcurrent,
+               ],
+           ]);
+           return;
+        }
 
         foreach ($approvedItems as $item) {
             if (($openCount + $opened) >= $maxConcurrent) {
