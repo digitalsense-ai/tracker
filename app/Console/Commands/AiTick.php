@@ -98,6 +98,7 @@ class AiTick extends Command
                        'unrealized_pnl'=> $p->unrealized_pnl !== null ? (float) $p->unrealized_pnl : null,
                        'opened_at'     => optional($p->opened_at)->toIso8601String(),
                        'strategy' => $p->strategy ?? null,
+                       'age_days' => optional($p->opened_at)?->diffInDays(now()),
                    ];
                })->values()->all();
                // Normalize recent trades
@@ -487,6 +488,24 @@ class AiTick extends Command
                 $marketContext['risk_on'] = ($marketContext['trend'] === 'bullish' && $marketContext['volatility'] !== 'high');
                 //end MARKET CONTENT
 
+                //STALE POSITIONS
+                $stalePositions = collect($openPositionsState)->filter(function ($p) {
+                   if (empty($p['opened_at'])) {
+                       return false;
+                   }
+                   $openedAt = \Carbon\Carbon::parse($p['opened_at']);
+                   return $openedAt->lt(now()->subDays(10));
+                })->values();
+
+                $policy = [];
+                if($stalePositions)
+                {
+                    $policy = [
+                       'max_position_age_days_soft' => 2,
+                       'max_position_age_days_hard' => 10,
+                    ];
+                }
+
                 $state = [
                     'time' => now()->toIso8601String(),
 
@@ -552,7 +571,9 @@ class AiTick extends Command
                            'side' => strtoupper($t['side'] ?? ''),
                            'minutes_ago' => $referenceTime->diffInMinutes($now),
                        ];
-                    }, $recentTradesState),                                       
+                    }, $recentTradesState),
+
+                    'policy' => $policy
                 ];
               
                 if (config('app.debug')) {
