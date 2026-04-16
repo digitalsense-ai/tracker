@@ -498,7 +498,7 @@ class AiTick extends Command
                 })->values();
 
                 $policy = [];
-                if($stalePositions)
+                if ($stalePositions->isNotEmpty())
                 {
                     $policy = [
                        'max_position_age_days_soft' => 2,
@@ -506,6 +506,48 @@ class AiTick extends Command
                     ];
                 }
 
+                $hardMaxAge = (int) ($policy['max_position_age_days_hard'] ?? 10);
+                $hardStalePositions = collect($openPositionsState)
+                   ->filter(function ($p) use ($hardMaxAge) {
+                       $ageDays = $p['age_days'] ?? null;
+                       return $ageDays !== null && $ageDays >= $hardMaxAge;
+                   })
+                   ->values();
+                if ($hardStalePositions->isNotEmpty()) {
+                   $decision = [
+                       'action' => 'CLOSE',
+                       'strategy' => ['name' => 'forced_hard_stale_close'],
+                       'reasoning' => 'Forced backend close: one or more positions exceeded hard stale age limit.',
+                       'orders' => $hardStalePositions->map(function ($p) {
+                           return [
+                               'symbol' => $p['symbol'],
+                               'side' => strtoupper(($p['side'] ?? 'LONG')) === 'LONG' ? 'SELL' : 'BUY',
+                               'qty' => (int) ($p['qty'] ?? 1),
+                           ];
+                       })->values()->all(),
+                   ];
+                   ModelLog::create([
+                       'ai_model_id' => $model->id,
+                       'action' => 'FORCED_CLOSE',
+                       'summary' => 'Backend forced close for hard stale positions',
+                       'payload' => [
+                           'reason' => 'hard_stale_positions',
+                           'hard_max_age_days' => $hardMaxAge,
+                           'positions' => $hardStalePositions->all(),
+                           'decision' => $decision,
+                       ],
+                   ]);
+                   $broker->processDecision($model, $decision);
+                   EquitySnapshot::create([
+                       'ai_model_id' => $model->id,
+                       'equity' => $model->equity,
+                       'taken_at' => now(),
+                   ]);
+                   $model->last_checked_at = now();
+                   $model->save();
+                   continue;
+                }
+                
                 $state = [
                     'time' => now()->toIso8601String(),
 
