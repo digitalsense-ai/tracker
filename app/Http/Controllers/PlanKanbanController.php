@@ -53,10 +53,34 @@ class PlanKanbanController extends Controller
 
             if($plan)
             {
+                // //Close SHORT for now                            
+                // $decision['orders'] = [
+                //     // 'AMD' => [
+                //     //     'symbol' => 'AMD',
+                //     //     'side' => 'BUY',
+                //     //     'direction' => 'short',
+                //     //     'qty' => 1,
+                //     //     'action' => 'CLOSE'
+                //     // ],
+                //     'BAC' => [
+                //         'symbol' => 'BAC',
+                //         'side' => 'BUY',
+                //         'direction' => 'short',
+                //         'qty' => 1,
+                //         'action' => 'CLOSE'
+                //     ],
+                // ];
+                // $broker->closePositionBySymbol($model, 'BAC', $decision);
+                // $broker->recalculateEquity($model);
+                // //Close SHORT for now
+
+                // dd("short position closed");
+
                 //Allowed Symbols only with mode = "active_on_open"
                 // Open positions
                 $open = Position::where('ai_model_id', $model->id)
                             ->where('status', 'open')
+                            ->where('side', 'long') //for time-being - omitting short direction
                             ->pluck('ticker');                
 
                 $approved = collect($plan['plan_json'] ?? [])
@@ -68,7 +92,8 @@ class PlanKanbanController extends Controller
                                         (($s['status'] ?? null) === 'approved') ||
                                         (!empty($s['keep']))
                                     )
-                                && (($s['mode'] ?? null) === 'active_on_open')    
+                                && (($s['mode'] ?? null) === 'active_on_open')
+                                && (($s['direction'] ?? null) === 'long')    //for time-being - omitting short direction
                                 )
                                 ->pluck('symbol');
 
@@ -84,6 +109,10 @@ class PlanKanbanController extends Controller
                 $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
                 foreach ($strategies as $idx => &$s) {
+                        //for time-being - omitting short direction
+                    if ($s['direction'] == 'short')
+                        continue;
+
                     if (!is_array($s)) {
                         continue;
                     }
@@ -170,6 +199,7 @@ class PlanKanbanController extends Controller
 
         $openPositions = Position::where('ai_model_id', $model->id)
             ->where('status', 'open')
+            ->where('side', 'long') //for time-being - omitting short direction
             ->orderByDesc('opened_at')
             ->get();
 
@@ -340,12 +370,16 @@ class PlanKanbanController extends Controller
         $approvedIds = array_map('strval', $approvedIds);
 
         foreach ($strategies as $idx => &$s) {
+            //for time-being - omitting short direction
+            if ($s['direction'] == 'short')
+                continue;
+
             if (!is_array($s)) {
                 continue;
             }
             if (!isset($s['id'])) {
                 $s['id'] = $idx;
-            }
+            }            
 
             $id = (string) $s['id'];
             $s['approved'] = in_array($id, $approvedIds, true);

@@ -331,7 +331,7 @@ class PaperBroker
        $trade->save();
     }
 
-   protected function closePositionBySymbol(AiModel $model, string $symbol, array $decision = []): void
+   public function closePositionBySymbol(AiModel $model, string $symbol, array $decision = []): void
    {
        $position = Position::where('ai_model_id', $model->id)
            ->where('ticker', $symbol)
