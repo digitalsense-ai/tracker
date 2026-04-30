@@ -98,7 +98,7 @@ class AiTick extends Command
                        'unrealized_pnl'=> $p->unrealized_pnl !== null ? (float) $p->unrealized_pnl : null,
                        'opened_at'     => optional($p->opened_at)->toIso8601String(),
                        'strategy' => $p->strategy ?? null,
-                       'age_days' => optional($p->opened_at)?->diffInDays(now()),
+                       'age_days' => optional($p->opened_at)?->diffInDays(now()),                       
                    ];
                })->values()->all();
                // Normalize recent trades
@@ -540,6 +540,25 @@ class AiTick extends Command
                     ];
                 }
 
+                $openPositionsState = collect($openPositionsState)->map(function ($position) use ($watchlist, $dailyPlan, $policy) {
+                   $symbol = strtoupper($position['symbol'] ?? '');
+                   $watch = collect($watchlist)->first(function ($w) use ($symbol) {
+                       return strtoupper($w['ticker'] ?? $w['symbol'] ?? '') === $symbol;
+                   });
+                   $planItem = collect($dailyPlan)->first(function ($item) use ($symbol) {
+                       return strtoupper($item['symbol'] ?? $item['ticker'] ?? '') === $symbol;
+                   });
+                   [$holdScore, $holdScoreReasons] = $this->calculateHoldScore(
+                       $position,
+                       $watch,
+                       $planItem,
+                       $policy
+                   );
+                   $position['hold_score'] = $holdScore;
+                   $position['hold_score_reasons'] = $holdScoreReasons;
+                   return $position;
+                })->values()->all();
+
                 $hardMaxAge = (int) ($policy['max_position_age_days_hard'] ?? 10);
                 $hardStalePositions = collect($openPositionsState)
                    ->filter(function ($p) use ($hardMaxAge) {
@@ -608,6 +627,9 @@ class AiTick extends Command
                         'start_equity'             => (float) ($model->start_equity ?? $equity),
                         'goal'                     => $model->goal_label ?? null,
                         'risk_per_trade'           => (float) ($model->risk_pct ?? 0),
+
+                        'min_hold_score' => (int) ($model->min_hold_score ?? 7),
+                        'force_close_below_score' => (int) ($model->force_close_below_score ?? 4),
                     ],
 
                     'account' => [
@@ -1197,5 +1219,96 @@ TXT;
         }
 
         return false; // no meaningful movement → skip
+    }
+
+    protected function calculateHoldScore(array $position, ?array $watch, ?array $planItem, array $policy): array
+    {
+       $score = 10;
+       $reasons = [];
+       $side = strtoupper($position['side'] ?? 'LONG');
+       $last = (float) ($watch['last'] ?? 0);
+       $ageDays = (float) ($position['age_days'] ?? 0);
+       $unrealizedPnl = (float) ($position['unrealized_pnl'] ?? 0);
+       $stop = $planItem['stop_loss'] ?? $position['stop_price'] ?? null;
+       $invalid = $planItem['invalid_level'] ?? $position['stop_price'] ?? null;
+       $target = $planItem['take_profit'] ?? $planItem['target_1'] ?? $position['target_price'] ?? null;
+       $softAge = (float) ($policy['max_position_age_days_soft'] ?? 2);
+       $hardAge = (float) ($policy['max_position_age_days_hard'] ?? 10);
+       if ($last > 0 && $stop !== null) {
+           if ($side === 'LONG' && $last <= (float) $stop) {
+               $score -= 3;
+               $reasons[] = 'stop_breached';
+           }
+           if ($side === 'SHORT' && $last >= (float) $stop) {
+               $score -= 3;
+               $reasons[] = 'stop_breached';
+           }
+       }
+       if ($last > 0 && $invalid !== null) {
+           if ($side === 'LONG' && $last <= (float) $invalid) {
+               $score -= 3;
+               $reasons[] = 'invalid_breached';
+           }
+           if ($side === 'SHORT' && $last >= (float) $invalid) {
+               $score -= 3;
+               $reasons[] = 'invalid_breached';
+           }
+       }
+       if ($ageDays >= $hardAge) {
+           $score -= 3;
+           $reasons[] = 'stale_hard';
+       } elseif ($ageDays >= $softAge) {
+           $score -= 2;
+           $reasons[] = 'stale_soft';
+       }
+       $regime = $watch['regime_hint'] ?? null;
+       $dayChange = (float) ($watch['day_change_pct'] ?? 0);
+       $vwapDist = (float) ($watch['distance_to_vwap_pct'] ?? 0);
+       if ($side === 'LONG') {
+           if ($regime === 'pullback') {
+               $score -= 2;
+               $reasons[] = 'pullback_regime';
+           }
+           if ($vwapDist < -0.3) {
+               $score -= 1;
+               $reasons[] = 'below_vwap';
+           }
+           if ($dayChange < -0.5) {
+               $score -= 1;
+               $reasons[] = 'negative_day_change';
+           }
+       }
+       if ($side === 'SHORT') {
+           if ($regime === 'breakout') {
+               $score -= 2;
+               $reasons[] = 'breakout_against_short';
+           }
+           if ($vwapDist > 0.3) {
+               $score -= 1;
+               $reasons[] = 'above_vwap_short';
+           }
+           if ($dayChange > 0.5) {
+               $score -= 1;
+               $reasons[] = 'positive_day_change_against_short';
+           }
+       }
+       if ($unrealizedPnl < 0) {
+           $score -= 1;
+           $reasons[] = 'negative_unrealized_pnl';
+       }
+       $targetNear = false;
+       if ($last > 0 && $target !== null) {
+           if ($side === 'LONG') {
+               $targetNear = $last >= ((float) $target * 0.98);
+           } else {
+               $targetNear = $last <= ((float) $target * 1.02);
+           }
+       }
+       if ($ageDays >= $softAge && !$targetNear) {
+           $score -= 1;
+           $reasons[] = 'target_not_near_after_soft_age';
+       }
+       $score = max(0, min(10, $score));
+       return [$score, $reasons];
     }
 }
