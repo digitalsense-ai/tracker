@@ -38,6 +38,7 @@ class PlanKanbanController extends Controller
         $models = AiModel::orderByDesc('return_pct')->get();
 
         $model = AiModel::where('slug', $slug)->firstOrFail();
+        $minScore = (int) ($model->min_entry_score ?? 8);
 
         //$date = $request->query('date', now()->toDateString());
         $date = $request->query('date');
@@ -83,19 +84,40 @@ class PlanKanbanController extends Controller
                             ->where('side', 'long') //for time-being - omitting short direction
                             ->pluck('ticker');                
 
+                // $approved = collect($plan['plan_json'] ?? [])
+                //                 ->filter(fn ($s) =>
+                //                 is_array($s) 
+                //                 &&
+                //                     (
+                //                         (!empty($s['approved']) && $s['approved']) ||
+                //                         (($s['status'] ?? null) === 'approved') ||
+                //                         (!empty($s['keep']))
+                //                     )
+                //                 && (($s['mode'] ?? null) === 'active_on_open')
+                //                 && (($s['direction'] ?? null) === 'long')    //for time-being - omitting short direction
+                //                 )
+                //                 ->pluck('symbol');
+
                 $approved = collect($plan['plan_json'] ?? [])
-                                ->filter(fn ($s) =>
-                                is_array($s) 
-                                &&
-                                    (
-                                        (!empty($s['approved']) && $s['approved']) ||
-                                        (($s['status'] ?? null) === 'approved') ||
-                                        (!empty($s['keep']))
-                                    )
-                                && (($s['mode'] ?? null) === 'active_on_open')
-                                && (($s['direction'] ?? null) === 'long')    //for time-being - omitting short direction
-                                )
-                                ->pluck('symbol');
+                    ->filter(function ($s) use ($minScore) {
+
+                        if (!is_array($s)) {
+                            return false;
+                        }
+
+                        $isApproved =
+                            (!empty($s['approved']) && $s['approved'] === true) ||
+                            (($s['status'] ?? null) === 'approved') ||
+                            (!empty($s['keep']));
+
+                        return $isApproved
+                            && ($s['mode'] ?? null) === 'active_on_open'
+                            && ($s['direction'] ?? null) === 'long'   //for time-being - omitting short direction
+                            && ((float) ($s['entry_score'] ?? 0) >= $minScore);
+                    })
+                    ->pluck('symbol')
+                    ->filter() 
+                    ->values();     // reset indexes
 
                 $allowed = $approved
                             ->map(fn ($s) => strtoupper($s))

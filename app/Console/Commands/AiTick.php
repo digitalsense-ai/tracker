@@ -395,6 +395,36 @@ class AiTick extends Command
                        ? (($last - $prevLoopPrice) / $prevLoopPrice) * 100
                        : null;
                     
+                    // ENTRY SCORE
+                    $entryScore = 10;
+                    $entryScoreReasons = [];
+                    // Too far from intended entry zone
+                    if ($distanceToEntryPct > 1.5) {
+                       $entryScore -= 2;
+                       $entryScoreReasons[] = 'far_from_entry';
+                    }
+                    // Weak participation
+                    if ($relativeVolume > 0 && $relativeVolume < 1.0) {
+                       $entryScore -= 1;
+                       $entryScoreReasons[] = 'low_relative_volume';
+                    }
+                    // Pullback regime is weak for new long continuation entries
+                    if ($regimeHint === 'pullback') {
+                       $entryScore -= 2;
+                       $entryScoreReasons[] = 'weak_regime_pullback';
+                    }
+                    // Below VWAP is a warning for long entries
+                    if ($distanceToVWAPPct < -0.3) {
+                       $entryScore -= 1;
+                       $entryScoreReasons[] = 'below_vwap';
+                    }
+                    // Risk-off market is bad for long breakout/momentum setups
+                    if (($marketContext['risk_on'] ?? false) === false && in_array($regimeHint, ['breakout'], true)) {
+                       $entryScore -= 1;
+                       $entryScoreReasons[] = 'market_not_risk_on';
+                    }
+                    $entryScore = max(0, min(10, $entryScore));
+
                     $watchlist[] = [
                        'ticker' => $ticker,
                        'last' => $last,
@@ -409,6 +439,10 @@ class AiTick extends Command
                        'relative_volume' => round((float) $relativeVolume, 2),
                        'intraday_range_pct' => round($intradayRangePct, 2),
                        'regime_hint' => $regimeHint,
+
+                       'entry_score' => $entryScore,
+                       'entry_score_reasons' => $entryScoreReasons,
+
                        'entry_reference' => round((float) $entryReference, 4),
                        'base_trade_budget' => $baseTradeBudget,
                        'max_qty' => $maxQty,
@@ -560,7 +594,8 @@ class AiTick extends Command
                     'model' => [
                         'name'                      => $model->name,
                         'check_interval_min'       => $interval,
-                        'loop_min_price_move_pct'  => (float) ($model->loop_min_price_move_pct ?? 0),                        
+                        'loop_min_price_move_pct'  => (float) ($model->loop_min_price_move_pct ?? 0),    
+                        'min_entry_score' => (int) ($model->min_entry_score ?? 8),                    
                         'max_concurrent_trades'    => $model->max_concurrent_trades ?? 1,
                         'allow_same_symbol_reentry'=> $model->allow_same_symbol_reentry ?? false,
                         'cooldown_minutes'         => $model->cooldown_minutes ?? 60,
