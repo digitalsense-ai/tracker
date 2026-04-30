@@ -19,6 +19,8 @@ return new class extends Migration
 8 = good
 9 = very strong
 10 = exceptional');
+            $table->unsignedTinyInteger('min_hold_score')->default(7)->after('min_entry_score');
+            $table->unsignedTinyInteger('force_close_below_score')->default(4)->after('min_hold_score');
         });
     }
 
