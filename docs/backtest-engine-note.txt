@@ -1,0 +1,8 @@
+// Pseudo update note for Backtest logic
+// Align exit logic with core-engine-spec:
+// - If trailing OFF: exit at TP
+// - If trailing ON: TP activates trailing, not exit
+// - Move SL to break-even on activation
+// - Exit only on SL / trailing SL
+
+// (Implementation should be added in backtest service layer)
