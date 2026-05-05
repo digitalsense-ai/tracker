@@ -14,7 +14,8 @@ class ModelsController extends Controller
 {
     public function index()
     {
-        $models = AiModel::orderByDesc('return_pct')->get();
+        //$models = AiModel::orderByDesc('return_pct')->get();
+        $models = AiModel::orderByDesc('active')->get();
         return view('models.index', compact('models'));
     }
 
@@ -89,7 +90,8 @@ class ModelsController extends Controller
         //     'logs' => $logs,
         //     'blocked' => $blocked,
         // ]);
-        $models = AiModel::orderByDesc('return_pct')->get();
+        //$models = AiModel::orderByDesc('return_pct')->get();
+        $models = AiModel::orderByDesc('active')->get();
 
         $model = AiModel::where('slug',$slug)->firstOrFail();
 
@@ -155,6 +157,8 @@ class ModelsController extends Controller
             'loop_min_price_move_pct' => 'nullable|numeric|min:0|max:100',
             'tags'  => 'nullable|array',
             'tags.*'=> 'string|max:30',
+            'min_entry_score' => 'nullable|integer|min:0|max:10',
+            'min_hold_score' => 'nullable|integer|min:0|max:10',
         ]);
     }
 

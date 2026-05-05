@@ -35,7 +35,8 @@ class PlanKanbanController extends Controller
     {       
         $broker = app(PaperBroker::class);
 
-        $models = AiModel::orderByDesc('return_pct')->get();
+        //$models = AiModel::orderByDesc('return_pct')->get();
+        $models = AiModel::orderByDesc('active')->get();
 
         $model = AiModel::where('slug', $slug)->firstOrFail();
         $minScore = (int) ($model->min_entry_score ?? 8);

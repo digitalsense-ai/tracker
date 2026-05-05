@@ -17,7 +17,7 @@
 
   <div class="nav-tabs">
     @foreach($models as $m)
-      <a href="{{ route('models.show', $m->slug) }}" class="{{ ($m->slug == $model->slug) ? 'active' : '' }}">{{ $m->name }}</a>
+      <a href="{{ route('models.show', $m->slug) }}" class="{{ ($m->slug == $model->slug) ? 'active' : '' }}" style="{{ ($m->active) ? '' : 'opacity:0.5;' }}">{{ $m->name }}</a>
     @endforeach
   </div>
 

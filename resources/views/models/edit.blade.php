@@ -121,6 +121,17 @@
             <input name="loop_min_price_move_pct" type="number" min="0" max="100" step="0.01" value="{{ old('loop_min_price_move_pct',$model->loop_min_price_move_pct) }}" class="table" style="width:100%;padding:8px" placeholder="0.30">
             <div class="small text-dim">Optional: if price change since last decision is smaller than this, you can skip the AI call to save tokens.</div>
           </div>
+          <div></div>
+
+          <div>
+            <label class="bold">Min Entry Score</label>
+            <input name="min_entry_score" type="number" min="0" max="10" step="1" value="{{ old('min_entry_score',$model->min_entry_score) }}" class="table" style="width:100%;padding:8px" placeholder="8" required>
+          </div>
+          <div>
+            <label class="bold">Min Hold Score</label>
+            <input name="min_hold_score" type="number" min="0" max="10" step="1" value="{{ old('min_hold_score',$model->min_hold_score) }}" class="table" style="width:100%;padding:8px" placeholder="7" required>
+          </div>
+
         </div>
       </div>
 
