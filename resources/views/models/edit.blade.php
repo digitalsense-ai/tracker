@@ -86,7 +86,7 @@
           </div>
           <div>
             <label class="bold">Default Risk per Strategy (%)</label>
-            <input name="default_risk_per_strategy_pct" type="number" min="0" max="100" step="0.1" value="{{ old('default_risk_per_strategy_pct',$model->default_risk_per_strategy_pct) }}" class="table" style="width:100%;padding:8px" placeholder="1.0">
+            <input name="default_risk_per_strategy_pct" type="number" min="0" max="100" step="0.01" value="{{ old('default_risk_per_strategy_pct',$model->default_risk_per_strategy_pct) }}" class="table" style="width:100%;padding:8px" placeholder="1.0">
           </div>
           <div>
             <label class="bold">Allow Sleeper Strategies</label>

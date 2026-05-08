@@ -82,7 +82,7 @@ class PlanKanbanController extends Controller
                 // Open positions
                 $open = Position::where('ai_model_id', $model->id)
                             ->where('status', 'open')
-                            ->where('side', 'long') //for time-being - omitting short direction
+                            //->where('side', 'long') //for time-being - omitting short direction
                             ->pluck('ticker');                
 
                 // $approved = collect($plan['plan_json'] ?? [])
@@ -113,8 +113,9 @@ class PlanKanbanController extends Controller
 
                         return $isApproved
                             && ($s['mode'] ?? null) === 'active_on_open'
-                            && ($s['direction'] ?? null) === 'long'   //for time-being - omitting short direction
-                            && ((float) ($s['entry_score'] ?? 0) >= $minScore);
+                            //&& ($s['direction'] ?? null) === 'long'   //for time-being - omitting short direction
+                            //&& ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                            ;
                     })
                     ->pluck('symbol')
                     ->filter() 
@@ -132,9 +133,9 @@ class PlanKanbanController extends Controller
                 $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
                 foreach ($strategies as $idx => &$s) {
-                        //for time-being - omitting short direction
-                    if ($s['direction'] == 'short')
-                        continue;
+                    // //for time-being - omitting short direction
+                    // if ($s['direction'] == 'short')
+                    //     continue;
 
                     if (!is_array($s)) {
                         continue;
@@ -148,6 +149,11 @@ class PlanKanbanController extends Controller
                         $s['approved'] = (!$s['approved']) ? true : $s['approved'];
                     else               
                         $s['approved'] = true;
+
+                    if ($s['direction'] != 'long' || 
+                        ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                    )
+                        $s['approved'] = false;
 
                     //Move to LIVE TRADE (LANE 3) without AI Tick when mode = "active_on_open"
                     // Support either `symbol` or `ticker` from the AI
@@ -212,9 +218,9 @@ class PlanKanbanController extends Controller
                     $s['id'] = $idx;
                 }
 
-                if (!empty($s['approved'])) {
+                if (!empty($s['approved'])) {                    
                     $approved[] = $s;
-                } else {
+                } else {                    
                     $ideaPool[] = $s;
                 }
             }
@@ -260,6 +266,53 @@ class PlanKanbanController extends Controller
                 //$s['InstrumentDetails'] = $data;
                 $openPosition['marketTiming'] = $marketTiming;                
             }
+
+            //Watchlist - for openPositions
+            $matchedOpenPositionList = null;
+
+            $openPositionsLogs = ModelLog::where('ai_model_id', $model->id)
+                                    ->where('action', 'HOLD')                                   
+                                    ->orderByDesc('id')
+                                    ->get();
+
+            foreach ($openPositionsLogs as $openPositionsLog) {
+
+                $prompt = $openPositionsLog->payload['raw']['prompt'] ?? null;
+
+                if (!$prompt) {
+                    continue;
+                }
+
+                preg_match(
+                    '/Here is your current trading state as JSON:\s*(\{.*?\})\s*Instructions for this model:/s',
+                    $prompt,
+                    $matches
+                );
+
+                if (empty($matches[1])) {
+                    continue;
+                }
+
+                $data = json_decode($matches[1], true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    continue;
+                }
+
+                $open_position_list = $data['open_positions'] ?? [];
+
+                $openPositionItem = collect($open_position_list)
+                    ->firstWhere('symbol', $sym);
+
+                if ($openPositionItem) {
+                    $matchedOpenPositionList = $openPositionItem;
+                    break;
+                }
+            }
+
+            // merge watchlist data into open position
+            $openPosition->watchlist = $matchedOpenPositionList;
+            //END Watchlist - for openPositions
         }
 
         $completedTrades = Trade::where('ai_model_id', $model->id)
@@ -290,6 +343,60 @@ class PlanKanbanController extends Controller
         }
         // Replace the original approved list
         $approved = $approvedFiltered;
+
+        //Watchlist - for for lane 1 and 2 
+        foreach ($approved as $key => $trade) {
+
+            $matchedWatchlist = null;
+
+            $trade_symbol = strtoupper($trade['symbol'] ?? $trade['ticker'] ?? '');
+            //$closedAt = Carbon::parse($trade->closed_at);
+
+            $completedTradesLogs = ModelLog::where('ai_model_id', $model->id)
+                                    ->where('action', 'HOLD')                                    
+                                    ->orderByDesc('id')
+                                    ->get();
+
+            foreach ($completedTradesLogs as $completedTradesLog) {
+
+                $prompt = $completedTradesLog->payload['raw']['prompt'] ?? null;
+
+                if (!$prompt) {
+                    continue;
+                }
+
+                preg_match(
+                    '/Here is your current trading state as JSON:\s*(\{.*?\})\s*Instructions for this model:/s',
+                    $prompt,
+                    $matches
+                );
+
+                if (empty($matches[1])) {
+                    continue;
+                }
+
+                $data = json_decode($matches[1], true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    continue;
+                }
+
+                $watchlist = $data['watchlist'] ?? [];
+
+                $watchItem = collect($watchlist)
+                    ->firstWhere('ticker', $trade_symbol);
+
+                if ($watchItem) {
+                    $matchedWatchlist = $watchItem;
+                    break;
+                }
+            }
+
+            // merge watchlist data into trade
+            //$trade['watchlist'] = $matchedWatchlist;
+            $approved[$key]['watchlist'] = $matchedWatchlist;            
+        }
+        //END Watchlist - for lane 1 and 2 
 
         return view('models.kanban', [
             'models'    => $models,
@@ -394,7 +501,9 @@ class PlanKanbanController extends Controller
 
         foreach ($strategies as $idx => &$s) {
             //for time-being - omitting short direction
-            if ($s['direction'] == 'short')
+            if ($s['direction'] != 'long' ||
+                ((float) ($s['entry_score'] ?? 0) >= $minScore)
+            )
                 continue;
 
             if (!is_array($s)) {
