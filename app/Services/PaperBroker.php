@@ -42,6 +42,7 @@ class PaperBroker
 
         $stopPrice = isset($o['stop']) ? (float) $o['stop'] : null;
         $targetPrice = isset($o['target']) ? (float) $o['target'] : null;
+        $policy = TakeProfitPolicy::resolve(null, null, $o);
 
         $trade = Trade::create([
             'ai_model_id' => $model->id,
@@ -66,7 +67,11 @@ class PaperBroker
             'tp1_hit' => false,
             'runner_active' => false,
             'highest_price' => $price,
-            'tp_model' => config('strategy.tp_model', 'simple_runner'),
+            'tp_model' => $policy['tp_model'],
+            'tp1_close_pct' => $policy['tp1_close_pct'],
+            'move_sl_to_break_even_on_tp1' => $policy['move_sl_to_break_even_on_tp1'],
+            'runner_trailing_enabled' => $policy['runner_trailing_enabled'],
+            'runner_trail_distance_rr' => $policy['runner_trail_distance_rr'],
             'leverage' => $o['leverage'] ?? 1,
             'margin' => $o['margin'] ?? 0,
             'unrealized_pnl' => 0,
@@ -213,6 +218,7 @@ class PaperBroker
            $position->highest_price = $this->bestPrice($position, $price);
            $position->save();
        } else {
+          $planItem = [];
           $planJson = AiDailyPlan::where('ai_model_id', $model->id)
               ->orderByDesc('trade_date')
               ->value('plan_json');
@@ -222,10 +228,14 @@ class PaperBroker
               $plan = collect($plans)->firstWhere('symbol', $symbol);
 
               if ($plan) {
+                  $planItem = $plan;
                   $stopPrice   = isset($plan['stop_loss']) ? (float) $plan['stop_loss'] : $stopPrice;
                   $targetPrice = isset($plan['take_profit']) ? (float) $plan['take_profit'] : $targetPrice;
               }
           }
+
+           $profile = StrategyProfile::query()->orderBy('id')->first();
+           $policy = TakeProfitPolicy::resolve(null, $profile, $planItem);
 
            // Create brand new position
            $position               = new Position();
@@ -241,7 +251,7 @@ class PaperBroker
            $position->tp1_hit      = false;
            $position->runner_active = false;
            $position->highest_price = $price;
-           $position->tp_model     = config('strategy.tp_model', 'simple_runner');
+           TakeProfitPolicy::persistOnPosition($position, $policy);
            $position->status       = 'open';
            $position->opened_at    = now();
            $position->save();
@@ -329,40 +339,38 @@ class PaperBroker
        }
 
        $this->initializeRunnerState($position, $price);
+       $policy = TakeProfitPolicy::resolve($position);
 
-       $tpEnabled = (bool) config('strategy.take_profit_enabled', true);
-       $tpModel = $position->tp_model ?: config('strategy.tp_model', 'simple_runner');
-
-       if (!$tpEnabled || $tpModel === 'no_tp' || !$position->target_price) {
-           $this->applyRunnerTrailing($position, $price);
+       if (!$policy['take_profit_enabled'] || $policy['tp_model'] === 'no_tp' || !$position->target_price) {
+           $this->applyRunnerTrailing($position, $price, $policy);
            return;
        }
 
-       if ($tpModel === 'full_exit' && $this->targetReached($position, $price)) {
+       if ($policy['tp_model'] === 'full_exit' && $this->targetReached($position, $price)) {
            $this->closePositionRemainder($position, (float) $position->target_price, 'TAKE_PROFIT', 'Full take-profit target reached');
            return;
        }
 
-       if ($tpModel !== 'simple_runner') {
+       if ($policy['tp_model'] !== 'simple_runner') {
            return;
        }
 
        if (!$position->tp1_hit && $this->targetReached($position, $price)) {
-           $this->handleTp1($position, (float) $position->target_price);
+           $this->handleTp1($position, (float) $position->target_price, $policy);
            return;
        }
 
-       $this->applyRunnerTrailing($position, $price);
+       $this->applyRunnerTrailing($position, $price, $policy);
    }
 
-   protected function handleTp1(Position $position, float $price): void
+   protected function handleTp1(Position $position, float $price, array $policy): void
    {
        $remainingQty = $this->positionRemainingQty($position);
        if ($remainingQty <= 0) {
            return;
        }
 
-       $closePct = max(0.0, min(1.0, (float) config('strategy.tp1_close_pct', 0.5)));
+       $closePct = max(0.0, min(1.0, (float) ($policy['tp1_close_pct'] ?? 0.5)));
        $closeQty = round($remainingQty * $closePct, 6);
        if ($closeQty <= 0) {
            return;
@@ -372,10 +380,10 @@ class PaperBroker
 
        $position->refresh();
        $position->tp1_hit = true;
-       $position->runner_active = (bool) config('strategy.runner_trailing_enabled', true);
+       $position->runner_active = (bool) ($policy['runner_trailing_enabled'] ?? true);
        $position->highest_price = $this->bestPrice($position, $price);
 
-       if ((bool) config('strategy.move_sl_to_break_even_on_tp1', true)) {
+       if ((bool) ($policy['move_sl_to_break_even_on_tp1'] ?? true)) {
            if ($position->side === 'short') {
                $position->stop_price = min((float) $position->stop_price ?: (float) $position->avg_price, (float) $position->avg_price);
            } else {
@@ -395,13 +403,16 @@ class PaperBroker
                'remaining_qty' => $this->positionRemainingQty($position),
                'stop_price' => $position->stop_price,
                'runner_active' => $position->runner_active,
+               'policy' => $policy,
            ],
        ]);
    }
 
-   protected function applyRunnerTrailing(Position $position, float $price): void
+   protected function applyRunnerTrailing(Position $position, float $price, ?array $policy = null): void
    {
-       if (!$position->runner_active || !(bool) config('strategy.runner_trailing_enabled', true)) {
+       $policy = $policy ?? TakeProfitPolicy::resolve($position);
+
+       if (!$position->runner_active || !(bool) ($policy['runner_trailing_enabled'] ?? true)) {
            return;
        }
 
@@ -414,7 +425,7 @@ class PaperBroker
        }
 
        $position->highest_price = $this->bestPrice($position, $price);
-       $trailDistance = $risk * (float) config('strategy.runner_trail_distance_rr', 1.0);
+       $trailDistance = $risk * (float) ($policy['runner_trail_distance_rr'] ?? 1.0);
 
        if ($position->side === 'short') {
            $newStop = (float) $position->highest_price + $trailDistance;
@@ -548,9 +559,12 @@ class PaperBroker
            $changed = true;
        }
 
-       if (!$position->tp_model) {
-           $position->tp_model = config('strategy.tp_model', 'simple_runner');
-           $changed = true;
+       $policy = TakeProfitPolicy::resolve($position);
+       foreach (['tp_model', 'tp1_close_pct', 'move_sl_to_break_even_on_tp1', 'runner_trailing_enabled', 'runner_trail_distance_rr'] as $field) {
+           if ($position->{$field} === null && array_key_exists($field, $policy)) {
+               $position->{$field} = $policy[$field];
+               $changed = true;
+           }
        }
 
        if ($changed) {
