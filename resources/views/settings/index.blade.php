@@ -17,6 +17,7 @@
     .topbar{display:flex;align-items:center;justify-content:space-between;margin:18px 0}
     .btn{background:#1c2b49;color:var(--text);padding:10px 14px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
     .btn:hover{filter:brightness(1.1)}
+    .help{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
   </style>
 </head>
 <body class="tracker">
@@ -32,9 +33,21 @@
             <div class="card">
               <div class="grid">
                 @foreach($rows as $r)
+                  @php
+                    $meta = is_array($r->meta ?? null) ? $r->meta : [];
+                    $options = $meta['options'] ?? null;
+                  @endphp
                   <div>
                     <label>{{ $r->label ?? $r->key }}</label>
-                    @if($r->type === 'bool')
+                    @if(is_array($options))
+                      <select name="settings[{{ $r->key }}][value]">
+                        @foreach($options as $option)
+                          <option value="{{ $option }}" {{ (string) $r->value === (string) $option ? 'selected' : '' }}>
+                            {{ $option }}
+                          </option>
+                        @endforeach
+                      </select>
+                    @elseif($r->type === 'bool')
                       <div class="checkbox">
                         <input type="checkbox" name="settings[{{ $r->key }}][value]" {{ (int)($r->value ?? 0) ? 'checked' : '' }}>
                         <span>Enabled</span>
@@ -48,6 +61,10 @@
                              value="{{ $r->value }}">
                     @else
                       <input type="text" name="settings[{{ $r->key }}][value]" value="{{ $r->value }}">
+                    @endif
+
+                    @if(!empty($meta['help']))
+                      <div class="help">{{ $meta['help'] }}</div>
                     @endif
 
                     <input type="hidden" name="settings[{{ $r->key }}][type]" value="{{ $r->type }}">
