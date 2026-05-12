@@ -43,6 +43,14 @@ class SettingsSeeder extends Seeder
         $svc->set('management.trailing_mult', 1.5, 'float', 'management', 'Trailing ATR(5)×');
         $svc->set('management.cooldown_after_sl', true, 'bool', 'management', 'Cooldown after SL');
 
+        // Take-profit policy / simple runner execution
+        $svc->set('management.take_profit_enabled', true, 'bool', 'management', 'Take Profit Enabled');
+        $svc->set('management.tp_model', 'simple_runner', 'string', 'management', 'TP Model', ['options'=>['full_exit','simple_runner','no_tp']]);
+        $svc->set('management.tp1_close_pct', 0.50, 'float', 'management', 'TP1 Close %', ['help'=>'0.50 = close 50% at TP1']);
+        $svc->set('management.move_sl_to_break_even_on_tp1', true, 'bool', 'management', 'Move SL to Break-even on TP1');
+        $svc->set('management.runner_trailing_enabled', true, 'bool', 'management', 'Runner Trailing Enabled');
+        $svc->set('management.runner_trail_distance_rr', 1.0, 'float', 'management', 'Runner Trail Distance (R)');
+
         $svc->set('ui.theme','light','string','ui','Theme (light|dark)', ['options'=>['light','dark']]);
     }
 }
