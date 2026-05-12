@@ -20,10 +20,25 @@ return [
     // Extra percent buffer applied when placing the stop-loss
     'sl_buffer_percent' => 0.00,
 
-    // Core profit model: target expressed as risk/reward multiple
-    'take_profit_rr' => 2,
+    // Master switch for take-profit handling. If false, exits use stop/trailing/manual logic only.
+    'take_profit_enabled' => true,
 
-    // If true, the target becomes a trigger for runner mode instead of a final exit
+    // Profit model:
+    // - full_exit: target closes the full trade
+    // - simple_runner: TP1 closes part, moves SL to break-even, and trails the remainder
+    // - no_tp: target is ignored
+    'tp_model' => 'simple_runner',
+
+    // Core profit trigger expressed as risk/reward multiple
+    'take_profit_rr' => 1.0,
+
+    // Simple runner defaults
+    'tp1_close_pct' => 0.50,
+    'move_sl_to_break_even_on_tp1' => true,
+    'runner_trailing_enabled' => true,
+    'runner_trail_distance_rr' => 1.0,
+
+    // Legacy switch: if true, the target becomes a trigger for runner mode instead of a final exit
     'enable_trailing_stop' => false,
 
     // Session window (New York time)

@@ -8,13 +8,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Position extends Model
 {
     protected $fillable = [
-        'ai_model_id','ticker','side','qty','avg_price','stop_price','target_price',
+        'ai_model_id','ticker','side','qty','remaining_qty','avg_price','stop_price','initial_stop_price','target_price',
+        'tp1_hit','runner_active','highest_price','tp_model',
         'leverage','margin','unrealized_pnl','status','opened_at'
     ];
 
     protected $casts = [
-        'opened_at' => 'datetime', 'qty' => 'float', 'avg_price' => 'float',
-        'stop_price' => 'float', 'target_price' => 'float',
+        'opened_at' => 'datetime', 'qty' => 'float', 'remaining_qty' => 'float', 'avg_price' => 'float',
+        'stop_price' => 'float', 'initial_stop_price' => 'float', 'target_price' => 'float',
+        'tp1_hit' => 'boolean', 'runner_active' => 'boolean', 'highest_price' => 'float',
         'leverage' => 'float', 'margin' => 'float', 'unrealized_pnl' => 'float',
     ];
 
