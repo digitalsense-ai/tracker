@@ -29,6 +29,7 @@ class ModelsController extends Controller
         $data = $this->validated($req);
         $data['slug'] = Str::slug($data['name']);
         $data['equity'] = ($data['equity'] == '' || $data['equity'] == '0.00') ? 10000 : $data['equity'];
+        $data = $this->normalizeBooleanFields($data);
         $model = AiModel::create($data);
         
         return redirect()->route('models.edit', $model)->with('ok','Saved');
@@ -45,52 +46,15 @@ class ModelsController extends Controller
         if (!$model->slug) $data['slug'] = Str::slug($data['name']);
 
         $data['equity'] = ($data['equity'] == '' || $data['equity'] == '0.00') ? 10000 : $data['equity'];
-        $data['active'] = (isset($data['active'])) ? 1 : 0;
+        $data = $this->normalizeBooleanFields($data);
 
         $model->update($data);       
         
         return back()->with('ok','Updated');
     }
 
-    // public function show(string $slug)
-    // {
-    //     //$model = AiModel::where('slug',$slug)->firstOrFail();
-    //     //return view('models.show', compact('model'));
-
-    //     $model = AiModel::where('slug',$slug)->firstOrFail();
-    //     $logs  = \App\Models\ModelLog::where('ai_model_id',$model->id)->latest()->limit(25)->get();
-    //     return view('models.show', compact('model','logs'));
-    // }
-
     public function show(string $slug)
     {
-        // $model = AiModel::where('slug',$slug)->firstOrFail();
-
-        // $positions = Position::where('ai_model_id',$model->id)->where('status','open')->orderBy('opened_at','desc')->get();
-        // $trades    = Trade::where('ai_model_id',$model->id)->orderBy('opened_at','desc')->limit(20)->get();
-        // $logs      = ModelLog::where('ai_model_id',$model->id)->orderBy('id','desc')->limit(30)->get();
-
-        // $blocked = [];
-        // foreach ($logs as $log) {
-        //     $p = $log->payload ?? [];
-        //     if (isset($p['guardrails']) && $p['guardrails'] === 'blocked') {
-        //         $blocked[] = [
-        //             'id' => $log->id,
-        //             'ts' => optional($log->created_at)->toDateTimeString(),
-        //             'violations' => $p['violations'] ?? [],
-        //             'computed' => $p['computed'] ?? [],
-        //         ];
-        //     }
-        // }
-
-        // return view('ai_models.show', [
-        //     'm' => $model,
-        //     'positions' => $positions,
-        //     'trades' => $trades,
-        //     'logs' => $logs,
-        //     'blocked' => $blocked,
-        // ]);
-        //$models = AiModel::orderByDesc('return_pct')->get();
         $models = AiModel::orderByDesc('active')->get();
 
         $model = AiModel::where('slug',$slug)->firstOrFail();
@@ -159,7 +123,30 @@ class ModelsController extends Controller
             'tags.*'=> 'string|max:30',
             'min_entry_score' => 'nullable|integer|min:0|max:10',
             'min_hold_score' => 'nullable|integer|min:0|max:10',
+            'take_profit_enabled' => 'nullable|boolean',
+            'tp_model' => 'nullable|in:full_exit,simple_runner,no_tp',
+            'tp1_close_pct' => 'nullable|numeric|min:0|max:1',
+            'move_sl_to_break_even_on_tp1' => 'nullable|boolean',
+            'runner_trailing_enabled' => 'nullable|boolean',
+            'runner_trail_distance_rr' => 'nullable|numeric|min:0|max:20',
         ]);
+    }
+
+    private function normalizeBooleanFields(array $data): array
+    {
+        foreach ([
+            'active',
+            'allow_sleeper_strategies',
+            'allow_activate_sleepers',
+            'allow_early_exit_on_invalidation',
+            'take_profit_enabled',
+            'move_sl_to_break_even_on_tp1',
+            'runner_trailing_enabled',
+        ] as $field) {
+            $data[$field] = array_key_exists($field, $data) ? (bool) $data[$field] : false;
+        }
+
+        return $data;
     }
 
     public function toggle($id, Request $request)
