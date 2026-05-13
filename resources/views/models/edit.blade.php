@@ -131,7 +131,49 @@
             <label class="bold">Min Hold Score</label>
             <input name="min_hold_score" type="number" min="0" max="10" step="1" value="{{ old('min_hold_score',$model->min_hold_score) }}" class="table" style="width:100%;padding:8px" placeholder="7" required>
           </div>
+        </div>
 
+        <div class="bold" style="margin:18px 0 8px">Trade Management / Take Profit</div>
+        <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="bold">Enable Take Profit</label>
+            <select name="take_profit_enabled" class="table" style="width:100%;padding:8px">
+              <option value="1" {{ old('take_profit_enabled', $model->take_profit_enabled ?? true) ? 'selected' : '' }}>Yes</option>
+              <option value="0" {{ old('take_profit_enabled', $model->take_profit_enabled ?? true) ? '' : 'selected' }}>No</option>
+            </select>
+          </div>
+          <div>
+            <label class="bold">TP Model</label>
+            <select name="tp_model" class="table" style="width:100%;padding:8px">
+              @foreach(['simple_runner' => 'Simple Runner', 'full_exit' => 'Full Exit', 'no_tp' => 'No TP'] as $value => $label)
+                <option value="{{ $value }}" {{ old('tp_model', $model->tp_model ?? 'simple_runner') === $value ? 'selected' : '' }}>{{ $label }}</option>
+              @endforeach
+            </select>
+            <div class="small text-dim">Simple Runner takes partial profit at TP1 and trails the remainder.</div>
+          </div>
+          <div>
+            <label class="bold">TP1 Close %</label>
+            <input name="tp1_close_pct" type="number" min="0" max="1" step="0.01" value="{{ old('tp1_close_pct', $model->tp1_close_pct ?? 0.50) }}" class="table" style="width:100%;padding:8px" placeholder="0.50">
+            <div class="small text-dim">Use decimals: 0.50 means close 50% at TP1.</div>
+          </div>
+          <div>
+            <label class="bold">Move SL to Break-even on TP1</label>
+            <select name="move_sl_to_break_even_on_tp1" class="table" style="width:100%;padding:8px">
+              <option value="1" {{ old('move_sl_to_break_even_on_tp1', $model->move_sl_to_break_even_on_tp1 ?? true) ? 'selected' : '' }}>Yes</option>
+              <option value="0" {{ old('move_sl_to_break_even_on_tp1', $model->move_sl_to_break_even_on_tp1 ?? true) ? '' : 'selected' }}>No</option>
+            </select>
+          </div>
+          <div>
+            <label class="bold">Runner Trailing</label>
+            <select name="runner_trailing_enabled" class="table" style="width:100%;padding:8px">
+              <option value="1" {{ old('runner_trailing_enabled', $model->runner_trailing_enabled ?? true) ? 'selected' : '' }}>Enabled</option>
+              <option value="0" {{ old('runner_trailing_enabled', $model->runner_trailing_enabled ?? true) ? '' : 'selected' }}>Disabled</option>
+            </select>
+          </div>
+          <div>
+            <label class="bold">Trail Distance (R)</label>
+            <input name="runner_trail_distance_rr" type="number" min="0" max="20" step="0.1" value="{{ old('runner_trail_distance_rr', $model->runner_trail_distance_rr ?? 1.0) }}" class="table" style="width:100%;padding:8px" placeholder="1.0">
+          </div>
         </div>
       </div>
 
