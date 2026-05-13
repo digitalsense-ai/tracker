@@ -9,7 +9,8 @@ class Position extends Model
 {
     protected $fillable = [
         'ai_model_id','ticker','side','qty','remaining_qty','avg_price','stop_price','initial_stop_price','target_price',
-        'tp1_hit','runner_active','highest_price','tp_model',
+        'tp1_hit','runner_active','highest_price','tp_model','tp1_close_pct','move_sl_to_break_even_on_tp1',
+        'runner_trailing_enabled','runner_trail_distance_rr',
         'leverage','margin','unrealized_pnl','status','opened_at'
     ];
 
@@ -17,6 +18,8 @@ class Position extends Model
         'opened_at' => 'datetime', 'qty' => 'float', 'remaining_qty' => 'float', 'avg_price' => 'float',
         'stop_price' => 'float', 'initial_stop_price' => 'float', 'target_price' => 'float',
         'tp1_hit' => 'boolean', 'runner_active' => 'boolean', 'highest_price' => 'float',
+        'tp1_close_pct' => 'float', 'move_sl_to_break_even_on_tp1' => 'boolean',
+        'runner_trailing_enabled' => 'boolean', 'runner_trail_distance_rr' => 'float',
         'leverage' => 'float', 'margin' => 'float', 'unrealized_pnl' => 'float',
     ];
 
