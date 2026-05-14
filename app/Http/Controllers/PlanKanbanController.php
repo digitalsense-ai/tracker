@@ -151,7 +151,8 @@ class PlanKanbanController extends Controller
                         $s['approved'] = true;
 
                     if ($s['direction'] != 'long' || 
-                        ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                       // ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                         ((float) ($s['entry_score'] ?? 0) < $minScore)
                     )
                         $s['approved'] = false;
 
@@ -479,6 +480,8 @@ class PlanKanbanController extends Controller
     public function update(string $slug, Request $request)
     {
         $model = AiModel::where('slug', $slug)->firstOrFail();
+        $minScore = (int) ($model->min_entry_score ?? 8);
+
         $date  = $request->input('date', now()->toDateString());
 
         $plan = AiDailyPlan::where('ai_model_id', $model->id)
@@ -502,7 +505,8 @@ class PlanKanbanController extends Controller
         foreach ($strategies as $idx => &$s) {
             //for time-being - omitting short direction
             if ($s['direction'] != 'long' ||
-                ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                //((float) ($s['entry_score'] ?? 0) >= $minScore)
+                ((float) ($s['entry_score'] ?? 0) < $minScore)
             )
                 continue;
 
