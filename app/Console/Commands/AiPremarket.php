@@ -13,7 +13,7 @@ use Carbon\Carbon;
 
 class AiPremarket extends Command
 {
-    protected $signature = 'ai:premarket {--model_id=} {--date=}';
+    protected $signature = 'ai:premarket {--model_id=} {--date=} {--region=}';
     protected $description = 'Run pre-market planning for AI models and store daily strategy plans';
 
     public function handle(): int

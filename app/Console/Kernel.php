@@ -58,6 +58,7 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('saxo:sync-instruments')->weekly();
 
+        /*
         // Daily at 9 AM
         $schedule->call(function () {
             // Get all models to process
@@ -93,6 +94,65 @@ class Kernel extends ConsoleKernel
         ->withoutOverlapping()          // prevents multiple runs at the same time
         //->runInBackground()             // runs the task in the background
         ->dailyAt('00:00');                      // schedules it to run daily
+        */
+
+        /**
+        * =========================
+        * EU / Denmark Market Scan
+        * Runs 30 mins before EU open
+        * =========================
+        */
+        $schedule->call(function () {
+           $models = AiModel::where('active', true)->pluck('id');
+           foreach ($models as $modelId) {
+               \Artisan::call('scanner:run', [
+                   '--model_id' => $modelId,
+                   '--region'   => 'EU',
+                   '--date'     => now('Europe/Copenhagen')->format('Y-m-d'),
+               ]);
+               sleep(5);
+               \Artisan::call('ai:premarket', [
+                   '--model_id' => $modelId,
+                   '--region'   => 'EU',
+                   '--date'     => now('Europe/Copenhagen')->format('Y-m-d'),
+               ]);
+               sleep(5);
+           }
+        })
+        ->name('ai-premarket-eu')
+        ->withoutOverlapping()
+        ->weekdays()
+        ->timezone('Europe/Copenhagen')
+        ->at('08:30');
+
+        /**
+        * =========================
+        * US Market Scan
+        * Runs 30 mins before US open
+        * =========================
+        */
+        $schedule->call(function () {
+           $models = AiModel::where('active', true)->pluck('id');
+           foreach ($models as $modelId) {
+               \Artisan::call('scanner:run', [
+                   '--model_id' => $modelId,
+                   '--region'   => 'US',
+                   '--date'     => now('America/New_York')->format('Y-m-d'),
+               ]);
+               sleep(5);
+               \Artisan::call('ai:premarket', [
+                   '--model_id' => $modelId,
+                   '--region'   => 'US',
+                   '--date'     => now('America/New_York')->format('Y-m-d'),
+               ]);
+               sleep(5);
+           }
+        })
+        ->name('ai-premarket-us')
+        ->withoutOverlapping()
+        ->weekdays()
+        ->timezone('America/New_York')
+        ->at('09:00');
 
         $schedule->call(function () {
             try {

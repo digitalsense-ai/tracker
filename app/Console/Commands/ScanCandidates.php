@@ -13,7 +13,7 @@ use App\Services\Scanner\DailyCandidateScanner;
 
 class ScanCandidates extends Command
 {
-    protected $signature = 'scanner:run {--model_id=} {--date=} {--limit=}';
+    protected $signature = 'scanner:run {--model_id=} {--date=} {--limit=} {--region=}';
     protected $description = 'Build the daily candidate symbol list (NO AI) and store it in DB.';
 
     public function handle(): int
@@ -89,10 +89,18 @@ class ScanCandidates extends Command
         | STEP 1 — Load universe (broker truth)
         |--------------------------------------------------------------------------
         */
+        $region = strtoupper($this->option('region') ?? 'US');
+        $exchangeIds = match ($region) {
+           'EU', 'DK' => array_filter(explode(',', env('SAXO_EU_EXCHANGE_IDS', 'XCSE'))),
+           'US'      => array_filter(explode(',', env('SAXO_US_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX'))),
+           default   => array_filter(explode(',', env('SAXO_UNIVERSE_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX,XCSE'))),
+        };
+
         $universe = SaxoInstrument::query()
             ->where('is_tradable', 1)
             ->whereIn('asset_type', ['Stock'])
-            ->whereIn('exchange_id', ['NASDAQ', 'NYSE'])
+            //->whereIn('exchange_id', ['NASDAQ', 'NYSE'])
+            ->whereIn('exchange_id', $exchangeIds)
             ->get();
 
         $this->info("Universe size: {$universe->count()}");
