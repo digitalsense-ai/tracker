@@ -469,6 +469,7 @@ class PaperBroker
        $partialTrade->qty = $qty;
        $partialTrade->entry_price = $sourceTrade->entry_price;
        $partialTrade->exit_price = $price;
+       $partialTrade->stop_loss = $sourceTrade->stop_loss;      
        $partialTrade->notional_entry = $qty * (float) $sourceTrade->entry_price;
        $partialTrade->notional_exit = $qty * $price;
        $partialTrade->fees = 0;

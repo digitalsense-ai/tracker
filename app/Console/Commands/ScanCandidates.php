@@ -91,9 +91,9 @@ class ScanCandidates extends Command
         */
         $region = strtoupper($this->option('region') ?? 'US');
         $exchangeIds = match ($region) {
-           'EU', 'DK' => array_filter(explode(',', env('SAXO_EU_EXCHANGE_IDS', 'XCSE'))),
+           'EU', 'DK' => array_filter(explode(',', env('SAXO_EU_EXCHANGE_IDS', 'CSE'))),
            'US'      => array_filter(explode(',', env('SAXO_US_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX'))),
-           default   => array_filter(explode(',', env('SAXO_UNIVERSE_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX,XCSE'))),
+           default   => array_filter(explode(',', env('SAXO_UNIVERSE_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX,CSE'))),
         };
 
         $universe = SaxoInstrument::query()
