@@ -410,7 +410,92 @@ class PlanKanbanController extends Controller
             'completedTrades' => $completedTrades,
         ]);
     }
-        
+           
+    function getMarketTiming(array $instrumentDetails): array
+    {
+        $sessions = collect($instrumentDetails['Sessions']);
+        $exchangeOffset = $instrumentDetails['TimeZoneOffset']; // "-05:00:00"
+
+        $nowUtc = now()->utc();
+
+        // Convert offset string to minutes
+        $offsetMinutes = $this->convertOffsetToMinutes($exchangeOffset);
+
+        // Exchange local time
+        $nowExchange = $nowUtc->copy()->utcOffset($offsetMinutes);
+
+        // 1️⃣ Find current session
+        $currentSession = $sessions->first(function ($session) use ($nowUtc) {
+
+            return $nowUtc->gte(Carbon::parse($session['StartTime'])->utc())
+                && $nowUtc->lt(Carbon::parse($session['EndTime'])->utc());
+        });
+
+        $currentState = $currentSession['State'] ?? 'Closed';
+
+        // 2️⃣ Market OPEN
+        if ($currentState === 'AutomatedTrading') {
+
+            $end = Carbon::parse($currentSession['EndTime'])->utc();
+
+            $diff = $nowUtc->diff($end);
+
+            return [
+                'is_open' => true,
+                'state' => $currentState,
+                'message' => 'Market closes in ' . $diff->format('%hh %Im'),
+                'exchange_time' => $nowExchange->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        // 3️⃣ Find next AutomatedTrading session
+        $nextOpenSession = $sessions
+            ->filter(fn ($s) =>
+                $s['State'] === 'AutomatedTrading'
+                && Carbon::parse($s['StartTime'])->utc()->gt($nowUtc)
+            )
+            ->sortBy('StartTime')
+            ->first();
+
+        if ($nextOpenSession) {
+
+            $openTimeUtc = Carbon::parse($nextOpenSession['StartTime'])->utc();
+
+            $diff = $nowUtc->diff($openTimeUtc);
+
+            $openTimeExchange = $openTimeUtc
+                ->copy()
+                ->utcOffset($offsetMinutes);
+
+            return [
+                'is_open' => false,
+                'state' => $currentState,
+                'message' => 'Market opens in ' . $diff->format('%hh %Im'),
+                'opens_at_exchange_time' => $openTimeExchange->format('Y-m-d H:i:s'),
+                'exchange_time_now' => $nowExchange->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        return [
+            'is_open' => false,
+            'state' => 'Closed',
+            'message' => 'No upcoming trading session found',
+        ];
+    }
+
+    function convertOffsetToMinutes(string $offset): int
+    {
+        preg_match('/([+-]?)(\d{2}):(\d{2})/', $offset, $matches);
+
+        $sign = ($matches[1] ?? '+') === '-' ? -1 : 1;
+
+        $hours = (int) ($matches[2] ?? 0);
+        $minutes = (int) ($matches[3] ?? 0);
+
+        return $sign * (($hours * 60) + $minutes);
+    }
+
+/*
     function getMarketTiming(array $instrumentDetails): array
     {
         $sessions = collect($instrumentDetails['Sessions']);
@@ -473,6 +558,7 @@ class PlanKanbanController extends Controller
             'message' => 'No upcoming trading session found',
         ];
     }
+*/
 
     /**
      * Update approvals for today's strategies.
