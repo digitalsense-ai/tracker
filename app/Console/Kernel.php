@@ -117,6 +117,13 @@ class Kernel extends ConsoleKernel
                    '--date'     => now('Europe/Copenhagen')->format('Y-m-d'),
                ]);
                sleep(5);
+
+                // Run the command for v2
+                \Artisan::call('ai:premarket-v2', [
+                    '--model_id' => $modelId,                  
+                ]);
+
+                sleep(5); // optional: pause before next model
            }
         })
         ->name('ai-premarket-eu')
@@ -146,6 +153,13 @@ class Kernel extends ConsoleKernel
                    '--date'     => now('America/New_York')->format('Y-m-d'),
                ]);
                sleep(5);
+
+               // Run the command for v2
+                \Artisan::call('ai:premarket-v2', [
+                    '--model_id' => $modelId,                  
+                ]);
+
+                sleep(5); // optional: pause before next model
            }
         })
         ->name('ai-premarket-us')
