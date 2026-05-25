@@ -1,0 +1,1 @@
+<div class="min-h-screen bg-slate-950 text-slate-100 p-10"><div class="max-w-7xl mx-auto"><h1 class="text-5xl font-bold">Portfolio Intelligence</h1><p class="mt-4 text-slate-400">Portfolio heat, exposure concentration, and execution quality oversight.</p></div></div>
