@@ -144,9 +144,17 @@ class PlanKanbanController extends Controller
                         $s['id'] = $idx;
                     }
 
-                    $id = (string) $s['id'];
-                    if(isset($s['approved']))                
-                        $s['approved'] = (!$s['approved']) ? true : $s['approved'];
+                    $id = (string) $s['id'];                    
+                    if(isset($s['approved']))
+                    {
+                        if(isset($s['status']))
+                        {
+                            if($s['status'] == 'approved')
+                                $s['approved'] = true;
+                        }
+
+                         $s['approved'] = (!$s['approved']) ? true : $s['approved'];
+                    }
                     else               
                         $s['approved'] = true;
 
@@ -220,10 +228,14 @@ class PlanKanbanController extends Controller
                 }
 
                 if (!empty($s['approved'])) {                    
-                    $approved[] = $s;
-                } else {                    
-                    $ideaPool[] = $s;
-                }
+                    $approved[] = $s;               
+                } else {
+                    if(isset($s['status']))
+                    {
+                        if($s['status'] != 'approved')
+                            $ideaPool[] = $s;
+                    }
+                }    
             }
         }//for loop plans
 

@@ -54,7 +54,7 @@ class Kernel extends ConsoleKernel
              ->at('23:30')
              ->appendOutputTo(storage_path('logs/nyopen.log'));
 
-        $schedule->command('ai:tick')->everyMinute()->withoutOverlapping()->onOneServer();
+        $schedule->command('ai:tick')->everyMinute()->withoutOverlapping()->weekdays()->onOneServer();
 
         $schedule->command('saxo:sync-instruments')->weekly();
 
@@ -120,7 +120,8 @@ class Kernel extends ConsoleKernel
 
                 // Run the command for v2
                 \Artisan::call('ai:premarket-v2', [
-                    '--model_id' => $modelId,                  
+                    '--model_id' => $modelId,   
+                    '--region'   => 'EU',               
                 ]);
 
                 sleep(5); // optional: pause before next model
@@ -156,7 +157,8 @@ class Kernel extends ConsoleKernel
 
                // Run the command for v2
                 \Artisan::call('ai:premarket-v2', [
-                    '--model_id' => $modelId,                  
+                    '--model_id' => $modelId, 
+                    '--region'   => 'US',                 
                 ]);
 
                 sleep(5); // optional: pause before next model

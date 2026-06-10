@@ -7,16 +7,20 @@ use App\Models\AiModel;
 use App\Models\AiDailyPlan;
 use App\Models\ModelLog;
 use App\Models\Position;
+use App\Models\SymbolMapping;
+
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
 class AiPremarketV2 extends Command
 {
-    protected $signature = 'ai:premarket-v2 {--model_id=}';
+    protected $signature = 'ai:premarket-v2 {--model_id=} {--region=}';
     protected $description = 'Generates a price-anchored v2 daily plan (playbook)';
 
     public function handle()
     {
+        $region = $this->option('region');
+
         $tradeDate = now()->toDateString();
 
         $query = AiModel::where('active', true);
@@ -47,9 +51,16 @@ class AiPremarketV2 extends Command
             //     'AAPL','MSFT','GOOG','AMZN','TSLA','NVDA','SPY','QQQ'
             // ])));
 
-            $universe = app(\App\Services\SymbolUniverse::class)->candidates(
-               $model->symbol_limit ?? 20
-            );
+            // $universe = app(\App\Services\SymbolUniverse::class)->candidates(
+            //    $model->symbol_limit ?? 20
+            // );
+
+            $universe = SymbolMapping::where('enabled_for_ai',true)
+                           ->where('region', $region)
+                           ->orderBy('priority')
+                           ->limit(($model->symbol_limit ?? 20))
+                           ->pluck('symbol')
+                           ->toArray();    
 
             // 3) Fetch LIVE prices for universe
             $prices = [];
@@ -114,6 +125,12 @@ TXT;
             if ($model->premarket_prompt_status) {
                 $premarketPrompt = $model->premarket_prompt ?? '';
             }
+
+            $premarketPrompt = str_replace(
+                '{{region}}',
+                strtoupper($region), // or just $region if you prefer raw "EU"
+                $premarketPrompt
+            );
 
             $userPrompt = <<<TXT
 Here is the current planning state as JSON:
@@ -246,14 +263,15 @@ TXT;
             unset($item);
 
             AiDailyPlan::updateOrCreate(
-                ['ai_model_id' => $model->id, 'trade_date' => $tradeDate],
+                ['ai_model_id' => $model->id, 'trade_date' => $tradeDate, 'region' => $region],
                 ['plan_json' => $plan]
             );
 
             ModelLog::create([
                 'ai_model_id' => $model->id,
-                'action' => 'PREMARKET_PLAN_V2',
-                'payload' => ['date' => $tradeDate, 'state' => $state, 'plan' => $plan],
+                'region' => $region,
+                'action' => 'PREMARKET_PLAN_V2_' . $region,
+                'payload' => ['date' => $tradeDate, 'region' => $region, 'state' => $state, 'plan' => $plan],
             ]);
         }
 
