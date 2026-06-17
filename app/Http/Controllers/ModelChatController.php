@@ -9,7 +9,8 @@ class ModelChatController extends Controller
 {
     public function index(string $slug)
     {
-        $models = AiModel::orderByDesc('return_pct')->get();
+        //$models = AiModel::orderByDesc('return_pct')->get();
+        $models = AiModel::orderByDesc('active')->get();
 
         $model = AiModel::where('slug', $slug)->firstOrFail();
 

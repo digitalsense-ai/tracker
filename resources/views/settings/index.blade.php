@@ -1,4 +1,4 @@
-<!doctype html>
+<!-- <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -17,11 +17,17 @@
     .topbar{display:flex;align-items:center;justify-content:space-between;margin:18px 0}
     .btn{background:#1c2b49;color:var(--text);padding:10px 14px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
     .btn:hover{filter:brightness(1.1)}
+    .help{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.35}
   </style>
 </head>
 <body class="tracker">
   <div class="container">
-    <div class="topbar">
+    <div class="topbar"> -->
+@extends('layouts.app')
+@section('title','Models')
+@section('header_title','Models')
+
+@section('content')      
       <h1>Strategy Settings (ORB Retest v2.3)</h1>
       <form method="post" action="{{ route('settings.update') }}">
         @csrf
@@ -29,25 +35,41 @@
         @foreach($groups as $groupName => $rows)
           <div class="section">
             <h2 style="margin:0 0 10px 0;text-transform:capitalize">{{ $groupName }}</h2>
-            <div class="card">
-              <div class="grid">
+            <div class="card" style="padding:12px">
+              <div class="grid" style="grid-template-columns:1fr 1fr;gap:12px">
                 @foreach($rows as $r)
+                  @php
+                    $meta = is_array($r->meta ?? null) ? $r->meta : [];
+                    $options = $meta['options'] ?? null;
+                  @endphp
                   <div>
                     <label>{{ $r->label ?? $r->key }}</label>
-                    @if($r->type === 'bool')
+                    @if(is_array($options))
+                      <select name="settings[{{ $r->key }}][value]" class="table" style="width:100%;padding:8px">
+                        @foreach($options as $option)
+                          <option value="{{ $option }}" {{ (string) $r->value === (string) $option ? 'selected' : '' }}>
+                            {{ $option }}
+                          </option>
+                        @endforeach
+                      </select>
+                    @elseif($r->type === 'bool')
                       <div class="checkbox">
                         <input type="checkbox" name="settings[{{ $r->key }}][value]" {{ (int)($r->value ?? 0) ? 'checked' : '' }}>
                         <span>Enabled</span>
                       </div>
                     @elseif($r->type === 'time')
-                      <input type="time" name="settings[{{ $r->key }}][value]" value="{{ $r->value }}">
+                      <input type="time" class="table" style="width:100%;padding:8px" name="settings[{{ $r->key }}][value]" value="{{ $r->value }}">
                     @elseif(in_array($r->type, ['int','float','string']))
                       <input type="{{ $r->type === 'string' ? 'text' : 'number' }}"
                              step="{{ $r->type === 'int' ? '1' : ($r->type === 'float' ? '0.01' : '') }}"
                              name="settings[{{ $r->key }}][value]"
-                             value="{{ $r->value }}">
+                             value="{{ $r->value }}" class="table" style="width:100%;padding:8px">
                     @else
-                      <input type="text" name="settings[{{ $r->key }}][value]" value="{{ $r->value }}">
+                      <input type="text" class="table" style="width:100%;padding:8px" name="settings[{{ $r->key }}][value]" value="{{ $r->value }}">
+                    @endif
+
+                    @if(!empty($meta['help']))
+                      <div class="help">{{ $meta['help'] }}</div>
                     @endif
 
                     <input type="hidden" name="settings[{{ $r->key }}][type]" value="{{ $r->type }}">
@@ -64,13 +86,16 @@
           <button class="btn" type="submit">Gem ændringer</button>
         </div>
       </form>
-    </div>
+
+  <!-- </div>  -->
 
     @if(session('ok'))
       <div class="card" style="padding:12px;border-left:4px solid var(--green);margin-top:10px">
         {{ session('ok') }}
       </div>
     @endif
-  </div>
+@endsection    
+<!--   </div>
 </body>
 </html>
+ -->
