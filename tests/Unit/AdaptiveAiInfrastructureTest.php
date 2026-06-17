@@ -26,7 +26,51 @@ class AdaptiveAiInfrastructureTest extends TestCase
         $this->assertSame(AiRecommendedAction::Continue->value, $result->recommendedAction);
     }
 
-    public function test_confidence_engine_returns_neutral_default_result(): void
+    public function test_reality_check_recommends_exit_when_setup_is_invalidated(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'setup_still_valid' => false,
+        ]);
+
+        $this->assertFalse($result->setupStillValid);
+        $this->assertSame(AiRecommendedAction::ExitTrade->value, $result->recommendedAction);
+        $this->assertContains('setup_invalidated', $result->reasonCodes);
+    }
+
+    public function test_reality_check_recommends_replan_when_plan_is_invalidated(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'plan_still_valid' => false,
+        ]);
+
+        $this->assertFalse($result->planStillValid);
+        $this->assertSame(AiRecommendedAction::ForceReplan->value, $result->recommendedAction);
+        $this->assertContains('plan_invalidated', $result->reasonCodes);
+    }
+
+    public function test_reality_check_recommends_reduce_risk_on_spread_expansion(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'spread_bps' => 35,
+            'max_spread_bps' => 20,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::ReduceRisk->value, $result->recommendedAction);
+        $this->assertContains('spread_expanded', $result->reasonCodes);
+    }
+
+    public function test_reality_check_recommends_downgrade_on_low_confidence(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'confidence' => 62,
+            'minimum_confidence' => 75,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::DowngradeCandidate->value, $result->recommendedAction);
+        $this->assertContains('confidence_below_threshold', $result->reasonCodes);
+    }
+
+    public function test_confidence_engine_returns_foundation_result(): void
     {
         $result = (new ConfidenceEngineService())->calculate();
 

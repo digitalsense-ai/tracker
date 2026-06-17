@@ -32,7 +32,7 @@ class LiveController extends Controller
            $totalSeries[$t]['value'] += (float) $s->equity;
        }
        $totalEquityHistory = array_values($totalSeries);
-       // Leading models by return
+       // Leading models by return     
        foreach ($models as $m) {
            $snapshots = $m->equitySnapshots;
            $start   = $m->start_equity
@@ -45,7 +45,12 @@ class LiveController extends Controller
            $returnPct = $start > 0 ? ($returnAbs / $start) * 100 : 0;
            $m->return_abs = $returnAbs;
            $m->return_pct = $returnPct;
+
+           $update_model = AiModel::findOrFail($m->id);
+           $update_model->return_pct = $returnPct;
+           $update_model->save();
        }
+      
        $leadingModels = $models->sortByDesc('return_pct')->take(5);
        return view('live.index', [
            'totalEquityHistory' => $totalEquityHistory,

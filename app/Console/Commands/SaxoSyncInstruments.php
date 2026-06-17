@@ -12,7 +12,7 @@ class SaxoSyncInstruments extends Command
 {
     protected $signature = 'saxo:sync-instruments
         {--asset_types=Stock : Comma-separated AssetTypes (default: Stock)}
-        {--exchange_ids=NASDAQ,NYSE : Comma-separated ExchangeIds (default: NASDAQ,NYSE)}
+        {--exchange_ids=NASDAQ,NYSE,AMEX,CSE : Comma-separated ExchangeIds (default: NASDAQ,NYSE,AMEX,CSE)}
         {--top=200 : Page size ($top)}
         {--max=2000 : Max rows to fetch total (safety cap)}
         {--include_non_tradable=0 : IncludeNonTradable (0/1)}

@@ -98,6 +98,7 @@ class AiTick extends Command
                        'unrealized_pnl'=> $p->unrealized_pnl !== null ? (float) $p->unrealized_pnl : null,
                        'opened_at'     => optional($p->opened_at)->toIso8601String(),
                        'strategy' => $p->strategy ?? null,
+                       'age_days' => optional($p->opened_at)?->diffInDays(now()),                       
                    ];
                })->values()->all();
                // Normalize recent trades
@@ -394,6 +395,36 @@ class AiTick extends Command
                        ? (($last - $prevLoopPrice) / $prevLoopPrice) * 100
                        : null;
                     
+                    // ENTRY SCORE
+                    $entryScore = 10;
+                    $entryScoreReasons = [];
+                    // Too far from intended entry zone
+                    if ($distanceToEntryPct > 1.5) {
+                       $entryScore -= 2;
+                       $entryScoreReasons[] = 'far_from_entry';
+                    }
+                    // Weak participation
+                    if ($relativeVolume > 0 && $relativeVolume < 1.0) {
+                       $entryScore -= 1;
+                       $entryScoreReasons[] = 'low_relative_volume';
+                    }
+                    // Pullback regime is weak for new long continuation entries
+                    if ($regimeHint === 'pullback') {
+                       $entryScore -= 2;
+                       $entryScoreReasons[] = 'weak_regime_pullback';
+                    }
+                    // Below VWAP is a warning for long entries
+                    if ($distanceToVWAPPct < -0.3) {
+                       $entryScore -= 1;
+                       $entryScoreReasons[] = 'below_vwap';
+                    }
+                    // Risk-off market is bad for long breakout/momentum setups
+                    if (($marketContext['risk_on'] ?? false) === false && in_array($regimeHint, ['breakout'], true)) {
+                       $entryScore -= 1;
+                       $entryScoreReasons[] = 'market_not_risk_on';
+                    }
+                    $entryScore = max(0, min(10, $entryScore));
+
                     $watchlist[] = [
                        'ticker' => $ticker,
                        'last' => $last,
@@ -408,6 +439,10 @@ class AiTick extends Command
                        'relative_volume' => round((float) $relativeVolume, 2),
                        'intraday_range_pct' => round($intradayRangePct, 2),
                        'regime_hint' => $regimeHint,
+
+                       'entry_score' => $entryScore,
+                       'entry_score_reasons' => $entryScoreReasons,
+
                        'entry_reference' => round((float) $entryReference, 4),
                        'base_trade_budget' => $baseTradeBudget,
                        'max_qty' => $maxQty,
@@ -487,6 +522,85 @@ class AiTick extends Command
                 $marketContext['risk_on'] = ($marketContext['trend'] === 'bullish' && $marketContext['volatility'] !== 'high');
                 //end MARKET CONTENT
 
+                //STALE POSITIONS
+                $stalePositions = collect($openPositionsState)->filter(function ($p) {
+                   if (empty($p['opened_at'])) {
+                       return false;
+                   }
+                   $openedAt = \Carbon\Carbon::parse($p['opened_at']);
+                   return $openedAt->lt(now()->subDays(10));
+                })->values();
+
+                $policy = [];
+                if ($stalePositions->isNotEmpty())
+                {
+                    $policy = [
+                       'max_position_age_days_soft' => 2,
+                       'max_position_age_days_hard' => 10,
+                    ];
+                }
+
+                $openPositionsState = collect($openPositionsState)->map(function ($position) use ($watchlist, $dailyPlan, $policy) {
+                   $symbol = strtoupper($position['symbol'] ?? '');
+                   $watch = collect($watchlist)->first(function ($w) use ($symbol) {
+                       return strtoupper($w['ticker'] ?? $w['symbol'] ?? '') === $symbol;
+                   });
+                   $planItem = collect($dailyPlan)->first(function ($item) use ($symbol) {
+                       return strtoupper($item['symbol'] ?? $item['ticker'] ?? '') === $symbol;
+                   });
+                   [$holdScore, $holdScoreReasons] = $this->calculateHoldScore(
+                       $position,
+                       $watch,
+                       $planItem,
+                       $policy
+                   );
+                   $position['hold_score'] = $holdScore;
+                   $position['hold_score_reasons'] = $holdScoreReasons;
+                   return $position;
+                })->values()->all();
+
+                $hardMaxAge = (int) ($policy['max_position_age_days_hard'] ?? 10);
+                $hardStalePositions = collect($openPositionsState)
+                   ->filter(function ($p) use ($hardMaxAge) {
+                       $ageDays = $p['age_days'] ?? null;
+                       return $ageDays !== null && $ageDays >= $hardMaxAge;
+                   })
+                   ->values();
+                if ($hardStalePositions->isNotEmpty()) {
+                   $decision = [
+                       'action' => 'CLOSE',
+                       'strategy' => ['name' => 'forced_hard_stale_close'],
+                       'reasoning' => 'Forced backend close: one or more positions exceeded hard stale age limit.',
+                       'orders' => $hardStalePositions->map(function ($p) {
+                           return [
+                               'symbol' => $p['symbol'],
+                               'side' => strtoupper(($p['side'] ?? 'LONG')) === 'LONG' ? 'SELL' : 'BUY',
+                               'qty' => (int) ($p['qty'] ?? 1),
+                           ];
+                       })->values()->all(),
+                   ];
+                   ModelLog::create([
+                       'ai_model_id' => $model->id,
+                       'action' => 'FORCED_CLOSE',
+                       'summary' => 'Backend forced close for hard stale positions',
+                       'payload' => [
+                           'reason' => 'hard_stale_positions',
+                           'hard_max_age_days' => $hardMaxAge,
+                           'positions' => $hardStalePositions->all(),
+                           'decision' => $decision,
+                       ],
+                   ]);
+                   $broker->processDecision($model, $decision);
+                   EquitySnapshot::create([
+                       'ai_model_id' => $model->id,
+                       'equity' => $model->equity,
+                       'taken_at' => now(),
+                   ]);
+                   $model->last_checked_at = now();
+                   $model->save();
+                   continue;
+                }
+                
                 $state = [
                     'time' => now()->toIso8601String(),
 
@@ -499,7 +613,8 @@ class AiTick extends Command
                     'model' => [
                         'name'                      => $model->name,
                         'check_interval_min'       => $interval,
-                        'loop_min_price_move_pct'  => (float) ($model->loop_min_price_move_pct ?? 0),                        
+                        'loop_min_price_move_pct'  => (float) ($model->loop_min_price_move_pct ?? 0),    
+                        'min_entry_score' => (int) ($model->min_entry_score ?? 8),                    
                         'max_concurrent_trades'    => $model->max_concurrent_trades ?? 1,
                         'allow_same_symbol_reentry'=> $model->allow_same_symbol_reentry ?? false,
                         'cooldown_minutes'         => $model->cooldown_minutes ?? 60,
@@ -512,6 +627,9 @@ class AiTick extends Command
                         'start_equity'             => (float) ($model->start_equity ?? $equity),
                         'goal'                     => $model->goal_label ?? null,
                         'risk_per_trade'           => (float) ($model->risk_pct ?? 0),
+
+                        'min_hold_score' => (int) ($model->min_hold_score ?? 7),
+                        'force_close_below_score' => (int) ($model->force_close_below_score ?? 4),
                     ],
 
                     'account' => [
@@ -552,7 +670,9 @@ class AiTick extends Command
                            'side' => strtoupper($t['side'] ?? ''),
                            'minutes_ago' => $referenceTime->diffInMinutes($now),
                        ];
-                    }, $recentTradesState),                                       
+                    }, $recentTradesState),
+
+                    'policy' => $policy
                 ];
               
                 if (config('app.debug')) {
@@ -1099,5 +1219,96 @@ TXT;
         }
 
         return false; // no meaningful movement → skip
+    }
+
+    protected function calculateHoldScore(array $position, ?array $watch, ?array $planItem, array $policy): array
+    {
+       $score = 10;
+       $reasons = [];
+       $side = strtoupper($position['side'] ?? 'LONG');
+       $last = (float) ($watch['last'] ?? 0);
+       $ageDays = (float) ($position['age_days'] ?? 0);
+       $unrealizedPnl = (float) ($position['unrealized_pnl'] ?? 0);
+       $stop = $planItem['stop_loss'] ?? $position['stop_price'] ?? null;
+       $invalid = $planItem['invalid_level'] ?? $position['stop_price'] ?? null;
+       $target = $planItem['take_profit'] ?? $planItem['target_1'] ?? $position['target_price'] ?? null;
+       $softAge = (float) ($policy['max_position_age_days_soft'] ?? 2);
+       $hardAge = (float) ($policy['max_position_age_days_hard'] ?? 10);
+       if ($last > 0 && $stop !== null) {
+           if ($side === 'LONG' && $last <= (float) $stop) {
+               $score -= 3;
+               $reasons[] = 'stop_breached';
+           }
+           if ($side === 'SHORT' && $last >= (float) $stop) {
+               $score -= 3;
+               $reasons[] = 'stop_breached';
+           }
+       }
+       if ($last > 0 && $invalid !== null) {
+           if ($side === 'LONG' && $last <= (float) $invalid) {
+               $score -= 3;
+               $reasons[] = 'invalid_breached';
+           }
+           if ($side === 'SHORT' && $last >= (float) $invalid) {
+               $score -= 3;
+               $reasons[] = 'invalid_breached';
+           }
+       }
+       if ($ageDays >= $hardAge) {
+           $score -= 3;
+           $reasons[] = 'stale_hard';
+       } elseif ($ageDays >= $softAge) {
+           $score -= 2;
+           $reasons[] = 'stale_soft';
+       }
+       $regime = $watch['regime_hint'] ?? null;
+       $dayChange = (float) ($watch['day_change_pct'] ?? 0);
+       $vwapDist = (float) ($watch['distance_to_vwap_pct'] ?? 0);
+       if ($side === 'LONG') {
+           if ($regime === 'pullback') {
+               $score -= 2;
+               $reasons[] = 'pullback_regime';
+           }
+           if ($vwapDist < -0.3) {
+               $score -= 1;
+               $reasons[] = 'below_vwap';
+           }
+           if ($dayChange < -0.5) {
+               $score -= 1;
+               $reasons[] = 'negative_day_change';
+           }
+       }
+       if ($side === 'SHORT') {
+           if ($regime === 'breakout') {
+               $score -= 2;
+               $reasons[] = 'breakout_against_short';
+           }
+           if ($vwapDist > 0.3) {
+               $score -= 1;
+               $reasons[] = 'above_vwap_short';
+           }
+           if ($dayChange > 0.5) {
+               $score -= 1;
+               $reasons[] = 'positive_day_change_against_short';
+           }
+       }
+       if ($unrealizedPnl < 0) {
+           $score -= 1;
+           $reasons[] = 'negative_unrealized_pnl';
+       }
+       $targetNear = false;
+       if ($last > 0 && $target !== null) {
+           if ($side === 'LONG') {
+               $targetNear = $last >= ((float) $target * 0.98);
+           } else {
+               $targetNear = $last <= ((float) $target * 1.02);
+           }
+       }
+       if ($ageDays >= $softAge && !$targetNear) {
+           $score -= 1;
+           $reasons[] = 'target_not_near_after_soft_age';
+       }
+       $score = max(0, min(10, $score));
+       return [$score, $reasons];
     }
 }
