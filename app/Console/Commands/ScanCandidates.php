@@ -13,12 +13,14 @@ use App\Services\Scanner\DailyCandidateScanner;
 
 class ScanCandidates extends Command
 {
-    protected $signature = 'scanner:run {--model_id=} {--date=} {--limit=}';
+    protected $signature = 'scanner:run {--model_id=} {--date=} {--limit=} {--region=}';
     protected $description = 'Build the daily candidate symbol list (NO AI) and store it in DB.';
 
     public function handle(): int
     {
         logger()->channel('scanner')->info('scanner.start');
+
+        $region = strtoupper($this->option('region') ?? 'US');
 
         $marketData = app(\App\Services\MarketData::class);
 
@@ -62,6 +64,7 @@ class ScanCandidates extends Command
         */
         $alreadyFrozen = AiDailyCandidate::where('trade_date', $tradeDate)
             ->where('ai_model_id', $modelId)
+            ->where('region', $region)
             ->whereJsonLength('symbols_json', '>', 0)
             ->exists();
 
@@ -89,10 +92,18 @@ class ScanCandidates extends Command
         | STEP 1 — Load universe (broker truth)
         |--------------------------------------------------------------------------
         */
+        //$region = strtoupper($this->option('region') ?? 'US');
+        $exchangeIds = match ($region) {
+           'EU', 'DK' => array_filter(explode(',', env('SAXO_EU_EXCHANGE_IDS', 'CSE'))),
+           'US'      => array_filter(explode(',', env('SAXO_US_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX'))),
+           default   => array_filter(explode(',', env('SAXO_UNIVERSE_EXCHANGE_IDS', 'NASDAQ,NYSE,AMEX,CSE'))),
+        };
+
         $universe = SaxoInstrument::query()
             ->where('is_tradable', 1)
             ->whereIn('asset_type', ['Stock'])
-            ->whereIn('exchange_id', ['NASDAQ', 'NYSE'])
+            //->whereIn('exchange_id', ['NASDAQ', 'NYSE'])
+            ->whereIn('exchange_id', $exchangeIds)
             ->get();
 
         $this->info("Universe size: {$universe->count()}");
@@ -136,8 +147,9 @@ class ScanCandidates extends Command
             if ($price !== null) {
                $min = config('trading.scanner.min_price');
                $max = config('trading.scanner.max_price');
-               if ($min !== null && $price < $min) { $this->reject('min_price', $instrument); continue; }
-               if ($max !== null && $price > $max) { $this->reject('max_price', $instrument); continue; }
+               
+               if ($min !== null && $price < $min) { $this->reject('min_price', $instrument, $price); continue; }
+               if ($max !== null && $price > $max) { $this->reject('max_price', $instrument, $price); continue; }
             }
 
             $tradableAs = is_array($instrument->tradable_as)
@@ -327,7 +339,7 @@ class ScanCandidates extends Command
         $symbols = $ranked->pluck('symbol')->values();
 
         AiDailyCandidate::updateOrCreate(
-            ['ai_model_id' => $modelId, 'trade_date' => $tradeDate],
+            ['ai_model_id' => $modelId, 'trade_date' => $tradeDate, 'region' => $region],
             [
                 'symbols_json' => $symbols,
                 'meta_json' => [
@@ -359,17 +371,33 @@ class ScanCandidates extends Command
         return self::SUCCESS;
     }
 
-    protected function reject(string $reason, SaxoInstrument $instrument): void
+    protected function reject(string $reason, SaxoInstrument $instrument, float $price = null): void
     {
         // Original symbol
         $rawSymbol = $instrument->symbol; // e.g. "NVDA:xnas"
         // Take only the part before the colon
         $symbol = strtoupper(strtok($rawSymbol, ':')); // -> "NVDA"
 
-        logger()->channel('scanner')->info("scanner.reject.{$reason}", [
-            'symbol' => $symbol,
-            'uic'    => $instrument->uic,
-        ]);
+        // logger()->channel('scanner')->info("scanner.reject.{$reason}", [
+        //     'symbol' => $symbol,
+        //     'uic'    => $instrument->uic,
+        // ]);
+
+        if($price)
+        {
+            logger()->channel('scanner')->info("scanner.reject.{$reason}", [
+                'symbol' => $symbol,
+                'uic'    => $instrument->uic,
+                'price'    => $price
+            ]);
+        }
+        else
+        {
+            logger()->channel('scanner')->info("scanner.reject.{$reason}", [
+                'symbol' => $symbol,
+                'uic'    => $instrument->uic
+            ]);
+        }
     }
 
     /*

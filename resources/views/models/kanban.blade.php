@@ -17,7 +17,7 @@
 
   <div class="nav-tabs">
     @foreach($models as $m)
-      <a href="{{ route('models.show', $m->slug) }}" class="{{ ($m->slug == $model->slug) ? 'active' : '' }}">{{ $m->name }}</a>
+      <a href="{{ route('models.show', $m->slug) }}" class="{{ ($m->slug == $model->slug) ? 'active' : '' }}" style="{{ ($m->active) ? '' : 'opacity:0.5;' }}">{{ $m->name }}</a>
     @endforeach
   </div>
 
@@ -133,6 +133,8 @@
         <div class="card-body" style="display:flex;flex-direction:column;gap:8px;max-height:640px;overflow:auto">
           @forelse($approved as $s)
             @php
+              $watchlist = $s['watchlist'] ?? null;
+
               $id = $s['id'] ?? null;
             @endphp
             <article class="card" style="padding:12px">
@@ -158,6 +160,20 @@
 
               @if(!empty($s['notes']))
                 <div class="small" style="margin-top:4px">{{ $s['notes'] }}</div>
+              @endif
+
+              @if(!empty($watchlist['entry_score']))
+                <div class="small">Entry Score: <span class="bold">{{ $watchlist['entry_score'] }}</span></div>
+              @endif
+              
+              @if(!empty($watchlist['entry_score_reasons']))                
+                <div class="small">Entry Score Reason: <span class="bold">
+                  @forelse($watchlist['entry_score_reasons'] as $reason)
+                    {{ $reason }}<br>
+                  @empty
+                    <div class="small">-</div>
+                  @endforelse  
+                </span></div>
               @endif
 
               <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
@@ -186,6 +202,8 @@
           @forelse($openPositions as $pos)
             <article class="card" style="padding:12px">
               @php
+                  $watchlist = $pos['watchlist'] ?? null;
+
                   $market = $pos['marketTiming'] ?? null;
 
                   $statusClass = match(true) {
@@ -234,6 +252,20 @@
                 </span>
               </div>
 
+              @if(!empty($watchlist['hold_score']))
+                <div class="small">Hold Score: <span class="bold">{{ $watchlist['hold_score'] }}</span></div>
+              @endif
+
+              @if(!empty($watchlist['hold_score_reasons']))                
+                <div class="small">Hold Score Reason: <span class="bold">
+                  @forelse($watchlist['hold_score_reasons'] as $reason)
+                    {{ $reason }}<br>
+                  @empty
+                    <div class="small">-</div>
+                  @endforelse  
+                </span></div>
+              @endif
+
               {{-- Placeholder for EXIT PLAN text - wired later when we store it --}}
               <div class="small" style="margin-top:4px">
                 <a href="#" class="exit-plan-link">Exit plan</a>
@@ -263,7 +295,7 @@
               <div class="small">Exit Price: <span class="bold">{{ number_format($t->exit_price,4) }}</span></div>
 
               <div class="small">Quantity: <span class="bold">{{ number_format($t->qty,4) }}</span></div>
-              @php                  
+              @php                       
                   $holdingTime = \Carbon\Carbon::parse($t->opened_at)->diffInSeconds($t->closed_at);
                   $hours = floor($holdingTime / 3600);
                   $minutes = floor(($holdingTime % 3600) / 60);
@@ -295,7 +327,7 @@
                   {{ $p >= 0 ? '+' : '' }}${{ number_format($p,2) }}
                 </span>
               </div>
-
+              
               <div class="small">
                   <a href="#"
                      title="Reason: {{ $t->exit_reason_code }} - {{ $t->exit_reason_text }}">

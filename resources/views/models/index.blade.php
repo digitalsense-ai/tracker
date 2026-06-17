@@ -12,7 +12,7 @@
     </div>
 
     @forelse($models as $m)
-      <article class="card" style="padding:16px">
+      <article class="card" style="padding:16px; {{ ($m->active) ? '' : 'opacity: 0.5;' }}">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div>
             <div class="bold">{{ $m->name }}</div>
