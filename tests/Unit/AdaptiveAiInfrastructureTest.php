@@ -10,6 +10,7 @@ use App\Services\AI\AiRealityCheckService;
 use App\Services\AI\ConfidenceEngineService;
 use App\Services\AI\MarketRegimeService;
 use App\Services\Risk\PortfolioRiskService;
+use App\Services\Risk\RiskGuardService;
 use App\Services\Trading\TradeLifecycleService;
 use PHPUnit\Framework\TestCase;
 
@@ -168,6 +169,89 @@ class AdaptiveAiInfrastructureTest extends TestCase
         $this->assertSame(0, $result->riskScore);
         $this->assertSame(PortfolioHeatLevel::Low, $result->heatLevel);
         $this->assertSame([], $result->riskFactors);
+        $this->assertContains('portfolio_heat_low', $result->recommendations);
+    }
+
+    public function test_portfolio_risk_detects_high_correlation_and_sector_exposure(): void
+    {
+        $result = (new PortfolioRiskService())->analyze([
+            'open_risk_score' => 40,
+            'correlation_score' => 85,
+            'sector_exposure_score' => 90,
+            'drawdown_score' => 30,
+            'volatility_score' => 30,
+            'execution_risk_score' => 20,
+            'news_risk_score' => 20,
+        ]);
+
+        $this->assertSame(PortfolioHeatLevel::Medium, $result->heatLevel);
+        $this->assertContains('correlation_risk_high', $result->riskFactors);
+        $this->assertContains('sector_exposure_high', $result->riskFactors);
+        $this->assertContains('portfolio_heat_medium_watch', $result->recommendations);
+    }
+
+    public function test_portfolio_risk_detects_critical_heat(): void
+    {
+        $result = (new PortfolioRiskService())->analyze([
+            'open_risk_score' => 100,
+            'correlation_score' => 100,
+            'sector_exposure_score' => 100,
+            'drawdown_score' => 100,
+            'volatility_score' => 100,
+            'execution_risk_score' => 100,
+            'news_risk_score' => 100,
+        ]);
+
+        $this->assertSame(PortfolioHeatLevel::Critical, $result->heatLevel);
+        $this->assertSame(100, $result->riskScore);
+        $this->assertContains('portfolio_heat_critical_watch', $result->recommendations);
+        $this->assertContains('reduce_new_risk_watch', $result->recommendations);
+    }
+
+    public function test_risk_guard_allows_clear_context(): void
+    {
+        $result = (new RiskGuardService())->evaluate();
+
+        $this->assertTrue($result->approved);
+        $this->assertSame('allow', $result->decision);
+        $this->assertSame([], $result->blockedBy);
+        $this->assertContains('risk_guard_clear', $result->reasonCodes);
+    }
+
+    public function test_risk_guard_blocks_on_kill_switch(): void
+    {
+        $result = (new RiskGuardService())->evaluate([
+            'kill_switch_active' => true,
+        ]);
+
+        $this->assertFalse($result->approved);
+        $this->assertSame('block', $result->decision);
+        $this->assertContains('kill_switch_active', $result->blockedBy);
+        $this->assertContains('blocked_by_kill_switch', $result->reasonCodes);
+    }
+
+    public function test_risk_guard_blocks_on_critical_portfolio_heat(): void
+    {
+        $result = (new RiskGuardService())->evaluate([
+            'portfolio_heat' => 'critical',
+        ]);
+
+        $this->assertFalse($result->approved);
+        $this->assertContains('portfolio_heat_critical', $result->blockedBy);
+        $this->assertContains('blocked_by_portfolio_heat', $result->reasonCodes);
+    }
+
+    public function test_risk_guard_warns_on_high_heat_and_bad_liquidity(): void
+    {
+        $result = (new RiskGuardService())->evaluate([
+            'portfolio_heat' => 'high',
+            'liquidity_ok' => false,
+        ]);
+
+        $this->assertTrue($result->approved);
+        $this->assertSame('allow', $result->decision);
+        $this->assertContains('portfolio_heat_high', $result->warnings);
+        $this->assertContains('liquidity_not_ok', $result->warnings);
     }
 
     public function test_trade_lifecycle_defaults_to_unknown_state(): void
