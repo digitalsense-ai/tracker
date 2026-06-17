@@ -9,6 +9,8 @@ use App\Enums\AI\ThesisState;
 use App\Services\AI\AiRealityCheckService;
 use App\Services\AI\ConfidenceEngineService;
 use App\Services\AI\MarketRegimeService;
+use App\Services\Risk\CapitalAllocationService;
+use App\Services\Risk\OpportunityCostService;
 use App\Services\Risk\PortfolioRiskService;
 use App\Services\Risk\RiskGuardService;
 use App\Services\Trading\TradeLifecycleService;
