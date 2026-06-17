@@ -13,11 +13,13 @@ use Carbon\Carbon;
 
 class AiPremarket extends Command
 {
-    protected $signature = 'ai:premarket {--model_id=} {--date=}';
+    protected $signature = 'ai:premarket {--model_id=} {--date=} {--region=}';
     protected $description = 'Run pre-market planning for AI models and store daily strategy plans';
 
     public function handle(): int
     {
+        $region = $this->option('region');
+
         $modelId = $this->option('model_id');
         $tradeDate = $this->option('date')
             ? Carbon::parse($this->option('date'))->toDateString()
@@ -150,6 +152,7 @@ class AiPremarket extends Command
 
                 $candidatesRow = AiDailyCandidate::where('ai_model_id',$modelId)
 									 ->where('trade_date',$tradeDate)
+                                     ->where('region',$region)
 									 ->first();
 				$candidates = $candidatesRow ? $candidatesRow->symbols_json : [];
 				$state['candidates'] = $candidates;
@@ -219,6 +222,12 @@ TXT;
             $premarketPrompt = '';
             if($model->premarket_prompt_status)
                 $premarketPrompt = $model->premarket_prompt ?? '';
+
+            $premarketPrompt = str_replace(
+                '{{region}}',
+                strtoupper($region), // or just $region if you prefer raw "EU"
+                $premarketPrompt
+            );
 
                 $userPrompt = <<<TXT
 Here is the current planning state as JSON:
@@ -347,6 +356,7 @@ TXT;
                     [
                         'ai_model_id' => $model->id,
                         'trade_date'  => $tradeDate,
+                        'region' => $region
                     ],
                     [
                         'locked_start_prompt' => $model->start_prompt ?? NULL,
@@ -358,7 +368,7 @@ TXT;
 
                 ModelLog::create([
                     'ai_model_id' => $model->id,
-                    'action'      => 'PREMARKET_PLAN',
+                    'action'      => 'PREMARKET_PLAN_' . $region,
                     'payload'     => [
                         'date'     => $tradeDate,
                         'state'    => $state,
@@ -367,12 +377,13 @@ TXT;
                         'dailyPlan' => $dailyPlan,
                     ],
                 ]);
-
-                $this->info("Stored pre-market plan id={$dailyPlan->id} for model {$model->id} on {$tradeDate}.");
+                
+                $this->info("Stored pre-market plan id={$dailyPlan->id} for model {$model->id} on {$tradeDate} for the region {$region}.");
             } catch (\Throwable $e) {
                 $this->error("Error in pre-market for model {$model->id}: " . $e->getMessage());
                 ModelLog::create([
                     'ai_model_id' => $model->id,
+                    'region' => $region,
                     'action'      => 'PREMARKET_ERROR',
                     'payload'     => [
                         'error' => $e->getMessage(),

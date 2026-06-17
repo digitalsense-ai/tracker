@@ -174,7 +174,8 @@ class ProfilesRecompute extends Command
             }
             /*SCHEMA NO JOIN*/
         } else {
-            $base = DB::table($table)->whereNotNull('strategy_profile_id');
+            //$base = DB::table($table)->whereNotNull('strategy_profile_id');
+            $base = DB::table("$table as t")->whereNotNull('t.strategy_profile_id');
         
 
         $profileIds = (clone $base)
@@ -204,16 +205,29 @@ class ProfilesRecompute extends Command
                 //     }
                 // }
 
+                // $rows = (clone $base)
+                //             ->where('t.strategy_profile_id', $pid)
+                //             ->when($days > 0, fn($q) => $q->whereBetween('s.' . $ts, [$start, $end]))
+                //             ->select([
+                //                 's.id',
+                //                 's.ticker',
+                //                 DB::raw('s.' . $ts . ' as ts'),
+                //                 's.entry_price',
+                //                 's.exit_price',
+                //                 's.result',
+                //             ])
+                //             ->get();
+
                 $rows = (clone $base)
                             ->where('t.strategy_profile_id', $pid)
-                            ->when($days > 0, fn($q) => $q->whereBetween('s.' . $ts, [$start, $end]))
+                            ->when($days > 0, fn($q) => $q->whereBetween('t.' . $ts, [$start, $end]))
                             ->select([
-                                's.id',
-                                's.ticker',
-                                DB::raw('s.' . $ts . ' as ts'),
-                                's.entry_price',
-                                's.exit_price',
-                                's.result',
+                                't.id',
+                                't.ticker',
+                                DB::raw('t.' . $ts . ' as ts'),
+                                't.entry_price',
+                                't.exit_price',
+                                't.result',
                             ])
                             ->get();
 

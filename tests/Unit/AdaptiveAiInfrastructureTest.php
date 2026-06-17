@@ -12,8 +12,7 @@ use App\Services\AI\MarketRegimeService;
 use App\Services\Risk\CapitalAllocationService;
 use App\Services\Risk\OpportunityCostService;
 use App\Services\Risk\PortfolioRiskService;
-use App\Services\Trading\DynamicPositionScalingService;
-use App\Services\Trading\PositionReclassificationService;
+use App\Services\Risk\RiskGuardService;
 use App\Services\Trading\TradeLifecycleService;
 use PHPUnit\Framework\TestCase;
 
@@ -30,6 +29,50 @@ class AdaptiveAiInfrastructureTest extends TestCase
         $this->assertSame(AiRecommendedAction::Continue->value, $result->recommendedAction);
     }
 
+    public function test_reality_check_recommends_exit_when_setup_is_invalidated(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'setup_still_valid' => false,
+        ]);
+
+        $this->assertFalse($result->setupStillValid);
+        $this->assertSame(AiRecommendedAction::ExitTrade->value, $result->recommendedAction);
+        $this->assertContains('setup_invalidated', $result->reasonCodes);
+    }
+
+    public function test_reality_check_recommends_replan_when_plan_is_invalidated(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'plan_still_valid' => false,
+        ]);
+
+        $this->assertFalse($result->planStillValid);
+        $this->assertSame(AiRecommendedAction::ForceReplan->value, $result->recommendedAction);
+        $this->assertContains('plan_invalidated', $result->reasonCodes);
+    }
+
+    public function test_reality_check_recommends_reduce_risk_on_spread_expansion(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'spread_bps' => 35,
+            'max_spread_bps' => 20,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::ReduceRisk->value, $result->recommendedAction);
+        $this->assertContains('spread_expanded', $result->reasonCodes);
+    }
+
+    public function test_reality_check_recommends_downgrade_on_low_confidence(): void
+    {
+        $result = (new AiRealityCheckService())->evaluate([
+            'confidence' => 62,
+            'minimum_confidence' => 75,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::DowngradeCandidate->value, $result->recommendedAction);
+        $this->assertContains('confidence_below_threshold', $result->reasonCodes);
+    }
+
     public function test_confidence_engine_returns_foundation_result(): void
     {
         $result = (new ConfidenceEngineService())->calculate();
@@ -37,6 +80,41 @@ class AdaptiveAiInfrastructureTest extends TestCase
         $this->assertSame(50, $result->confidence);
         $this->assertSame(50, $result->uncertainty);
         $this->assertSame('neutral', $result->level);
+        $this->assertContains('balanced_context', $result->reasonCodes);
+    }
+
+    public function test_confidence_engine_detects_high_confidence_context(): void
+    {
+        $result = (new ConfidenceEngineService())->calculate([
+            'setup_score' => 90,
+            'regime_fit' => 85,
+            'liquidity_score' => 80,
+            'news_risk_score' => 10,
+            'execution_quality' => 80,
+            'recent_model_score' => 85,
+        ]);
+
+        $this->assertSame('high', $result->level);
+        $this->assertGreaterThanOrEqual(80, $result->confidence);
+        $this->assertContains('setup_quality_strong', $result->reasonCodes);
+        $this->assertContains('regime_fit_strong', $result->reasonCodes);
+    }
+
+    public function test_confidence_engine_detects_weak_context(): void
+    {
+        $result = (new ConfidenceEngineService())->calculate([
+            'setup_score' => 35,
+            'regime_fit' => 30,
+            'liquidity_score' => 40,
+            'news_risk_score' => 85,
+            'execution_quality' => 35,
+            'recent_model_score' => 30,
+        ]);
+
+        $this->assertSame('low', $result->level);
+        $this->assertContains('setup_quality_weak', $result->reasonCodes);
+        $this->assertContains('regime_fit_weak', $result->reasonCodes);
+        $this->assertContains('news_risk_high', $result->reasonCodes);
     }
 
     public function test_market_regime_defaults_to_unknown(): void
@@ -45,6 +123,45 @@ class AdaptiveAiInfrastructureTest extends TestCase
 
         $this->assertSame(MarketRegime::Unknown, $result->primaryRegime);
         $this->assertSame(0, $result->confidence);
+        $this->assertContains('insufficient_context', $result->reasonCodes);
+    }
+
+    public function test_market_regime_detects_news_driven_market(): void
+    {
+        $result = (new MarketRegimeService())->detect([
+            'news_driven' => true,
+        ]);
+
+        $this->assertSame(MarketRegime::NewsDriven, $result->primaryRegime);
+        $this->assertSame(80, $result->confidence);
+        $this->assertContains('news_driven_market', $result->reasonCodes);
+    }
+
+    public function test_market_regime_detects_trend_with_expansion_secondary(): void
+    {
+        $result = (new MarketRegimeService())->detect([
+            'trend_strength' => 78,
+            'range_score' => 30,
+            'volatility_expansion' => true,
+        ]);
+
+        $this->assertSame(MarketRegime::Trend, $result->primaryRegime);
+        $this->assertSame(78, $result->confidence);
+        $this->assertContains(MarketRegime::Expansion->value, $result->secondaryRegimes);
+        $this->assertContains('trend_strength_high', $result->reasonCodes);
+        $this->assertContains('volatility_expansion', $result->reasonCodes);
+    }
+
+    public function test_market_regime_detects_risk_off_context(): void
+    {
+        $result = (new MarketRegimeService())->detect([
+            'risk_off_score' => 82,
+            'risk_on_score' => 20,
+        ]);
+
+        $this->assertSame(MarketRegime::RiskOff, $result->primaryRegime);
+        $this->assertSame(82, $result->confidence);
+        $this->assertContains('risk_off_dominant', $result->reasonCodes);
     }
 
     public function test_portfolio_risk_defaults_to_low_heat(): void
@@ -54,131 +171,202 @@ class AdaptiveAiInfrastructureTest extends TestCase
         $this->assertSame(0, $result->riskScore);
         $this->assertSame(PortfolioHeatLevel::Low, $result->heatLevel);
         $this->assertSame([], $result->riskFactors);
+        $this->assertContains('portfolio_heat_low', $result->recommendations);
     }
 
-    public function test_position_reclassification_allows_safe_high_confidence_transition(): void
+    public function test_portfolio_risk_detects_high_correlation_and_sector_exposure(): void
     {
-        $result = (new PositionReclassificationService())->evaluate([
-            'from_strategy' => 'ORB Retest',
-            'candidate_strategy' => 'Momentum Continuation',
-            'same_direction' => true,
-            'transition_count' => 0,
-            'hard_stop_would_widen' => false,
-            'averaging_down' => false,
-            'expected_value_improvement' => 80,
-            'candidate_confidence' => 90,
-            'minimum_confidence' => 85,
+        $result = (new PortfolioRiskService())->analyze([
+            'open_risk_score' => 40,
+            'correlation_score' => 85,
+            'sector_exposure_score' => 90,
+            'drawdown_score' => 30,
+            'volatility_score' => 30,
+            'execution_risk_score' => 20,
+            'news_risk_score' => 20,
         ]);
 
-        $this->assertTrue($result->canReclassify);
-        $this->assertSame('ORB Retest', $result->fromStrategy);
-        $this->assertSame('Momentum Continuation', $result->toStrategy);
-        $this->assertContains('expected_value_improved', $result->reasonCodes);
-        $this->assertContains('candidate_confidence_strong', $result->reasonCodes);
+        $this->assertSame(PortfolioHeatLevel::Medium, $result->heatLevel);
+        $this->assertContains('correlation_risk_high', $result->riskFactors);
+        $this->assertContains('sector_exposure_high', $result->riskFactors);
+        $this->assertContains('portfolio_heat_medium_watch', $result->recommendations);
     }
 
-    public function test_position_reclassification_blocks_unsafe_transition(): void
+    public function test_portfolio_risk_detects_critical_heat(): void
     {
-        $result = (new PositionReclassificationService())->evaluate([
-            'from_strategy' => 'ORB Retest',
-            'candidate_strategy' => 'Mean Reversion',
-            'same_direction' => false,
-            'transition_count' => 1,
-            'hard_stop_would_widen' => true,
-            'averaging_down' => true,
-            'expected_value_improvement' => 20,
-            'candidate_confidence' => 50,
-            'minimum_confidence' => 85,
+        $result = (new PortfolioRiskService())->analyze([
+            'open_risk_score' => 100,
+            'correlation_score' => 100,
+            'sector_exposure_score' => 100,
+            'drawdown_score' => 100,
+            'volatility_score' => 100,
+            'execution_risk_score' => 100,
+            'news_risk_score' => 100,
         ]);
 
-        $this->assertFalse($result->canReclassify);
-        $this->assertContains('direction_mismatch', $result->reasonCodes);
-        $this->assertContains('transition_limit_reached', $result->reasonCodes);
-        $this->assertContains('hard_stop_would_widen', $result->reasonCodes);
-        $this->assertContains('averaging_down_detected', $result->reasonCodes);
+        $this->assertSame(PortfolioHeatLevel::Critical, $result->heatLevel);
+        $this->assertSame(100, $result->riskScore);
+        $this->assertContains('portfolio_heat_critical_watch', $result->recommendations);
+        $this->assertContains('reduce_new_risk_watch', $result->recommendations);
     }
 
-    public function test_dynamic_position_scaling_recommends_scale_up_watch(): void
+    public function test_risk_guard_allows_clear_context(): void
     {
-        $result = (new DynamicPositionScalingService())->evaluate([
-            'confidence' => 90,
-            'thesis_strength' => 85,
-            'portfolio_heat' => 'low',
-            'execution_quality' => 80,
-            'current_size_pct' => 25,
-            'max_size_pct' => 100,
+        $result = (new RiskGuardService())->evaluate();
+
+        $this->assertTrue($result->approved);
+        $this->assertSame('allow', $result->decision);
+        $this->assertSame([], $result->blockedBy);
+        $this->assertContains('risk_guard_clear', $result->reasonCodes);
+    }
+
+    public function test_risk_guard_blocks_on_kill_switch(): void
+    {
+        $result = (new RiskGuardService())->evaluate([
+            'kill_switch_active' => true,
         ]);
 
-        $this->assertSame('scale_up_watch', $result['action']);
-        $this->assertSame(50, $result['target_size_pct']);
-        $this->assertContains('confidence_strong', $result['reason_codes']);
+        $this->assertFalse($result->approved);
+        $this->assertSame('block', $result->decision);
+        $this->assertContains('kill_switch_active', $result->blockedBy);
+        $this->assertContains('blocked_by_kill_switch', $result->reasonCodes);
     }
 
-    public function test_dynamic_position_scaling_blocks_scale_up_on_high_heat(): void
+    public function test_risk_guard_blocks_on_critical_portfolio_heat(): void
     {
-        $result = (new DynamicPositionScalingService())->evaluate([
-            'confidence' => 90,
-            'thesis_strength' => 85,
-            'portfolio_heat' => 'high',
-            'execution_quality' => 80,
-            'current_size_pct' => 50,
-            'max_size_pct' => 100,
-        ]);
-
-        $this->assertSame('scale_down_watch', $result['action']);
-        $this->assertContains('portfolio_heat_blocks_scaling_up', $result['reason_codes']);
-    }
-
-    public function test_opportunity_cost_detects_better_opportunity(): void
-    {
-        $result = (new OpportunityCostService())->evaluate([
-            'current_trade_ev' => 40,
-            'best_alternative_ev' => 85,
-            'capital_locked_pct' => 80,
-            'portfolio_heat' => 'high',
-        ]);
-
-        $this->assertGreaterThanOrEqual(50, $result['score']);
-        $this->assertSame(45, $result['ev_gap']);
-        $this->assertContains('better_opportunity_detected', $result['reason_codes']);
-        $this->assertContains('capital_locked_high', $result['reason_codes']);
-    }
-
-    public function test_capital_allocation_blocks_on_critical_heat(): void
-    {
-        $result = (new CapitalAllocationService())->allocate([
-            'confidence' => 95,
-            'thesis_strength' => 95,
+        $result = (new RiskGuardService())->evaluate([
             'portfolio_heat' => 'critical',
-            'opportunity_cost_score' => 0,
-            'volatility_score' => 20,
         ]);
 
-        $this->assertSame(0, $result['allocation_pct']);
-        $this->assertSame('block_new_allocation', $result['recommendation']);
-        $this->assertContains('critical_portfolio_heat', $result['reason_codes']);
+        $this->assertFalse($result->approved);
+        $this->assertContains('portfolio_heat_critical', $result->blockedBy);
+        $this->assertContains('blocked_by_portfolio_heat', $result->reasonCodes);
     }
 
-    public function test_capital_allocation_supports_strong_candidate(): void
+    public function test_risk_guard_warns_on_high_heat_and_bad_liquidity(): void
     {
-        $result = (new CapitalAllocationService())->allocate([
-            'confidence' => 90,
-            'thesis_strength' => 90,
-            'portfolio_heat' => 'low',
-            'opportunity_cost_score' => 10,
-            'volatility_score' => 20,
+        $result = (new RiskGuardService())->evaluate([
+            'portfolio_heat' => 'high',
+            'liquidity_ok' => false,
         ]);
 
-        $this->assertGreaterThanOrEqual(75, $result['allocation_pct']);
-        $this->assertSame('strong_allocation_candidate', $result['recommendation']);
-        $this->assertContains('confidence_supports_allocation', $result['reason_codes']);
+        $this->assertTrue($result->approved);
+        $this->assertSame('allow', $result->decision);
+        $this->assertContains('portfolio_heat_high', $result->warnings);
+        $this->assertContains('liquidity_not_ok', $result->warnings);
     }
 
-    public function test_trade_lifecycle_defaults_to_unknown_state(): void
+    public function test_thesis_strength_calculates_strong_context(): void
     {
-        $result = (new TradeLifecycleService())->evaluate();
+        $score = (new ThesisStrengthService())->calculate([
+            'price_structure_score' => 90,
+            'volume_confirmation_score' => 85,
+            'momentum_score' => 80,
+            'regime_fit' => 85,
+            'news_risk_score' => 10,
+            'execution_quality' => 80,
+        ]);
 
-        $this->assertSame(ThesisState::Validation, $result->state);
-        $this->assertSame(50, $result->thesisStrength);
+        $this->assertGreaterThanOrEqual(80, $score);
+    }
+
+    public function test_thesis_strength_calculates_weak_context(): void
+    {
+        $score = (new ThesisStrengthService())->calculate([
+            'price_structure_score' => 25,
+            'volume_confirmation_score' => 30,
+            'momentum_score' => 25,
+            'regime_fit' => 35,
+            'news_risk_score' => 90,
+            'execution_quality' => 30,
+        ]);
+
+        $this->assertLessThan(40, $score);
+    }
+
+    public function test_trade_lifecycle_detects_continuation_state(): void
+    {
+        $result = (new TradeLifecycleService())->evaluate([
+            'price_structure_score' => 90,
+            'volume_confirmation_score' => 85,
+            'momentum_score' => 80,
+            'regime_fit' => 85,
+            'news_risk_score' => 10,
+            'execution_quality' => 80,
+        ]);
+
+        $this->assertSame(ThesisState::Continuation, $result->state);
+        $this->assertContains('hold_watch', $result->recommendations);
+    }
+
+    public function test_trade_lifecycle_detects_compression_state(): void
+    {
+        $result = (new TradeLifecycleService())->evaluate([
+            'compression_detected' => true,
+            'price_structure_score' => 55,
+            'volume_confirmation_score' => 55,
+            'momentum_score' => 45,
+            'regime_fit' => 50,
+            'news_risk_score' => 50,
+            'execution_quality' => 50,
+        ]);
+
+        $this->assertSame(ThesisState::Compression, $result->state);
+        $this->assertContains('compression_detected', $result->warnings);
+        $this->assertContains('compression_watch', $result->recommendations);
+    }
+
+    public function test_trade_compression_detects_compressed_conditions(): void
+    {
+        $result = (new TradeCompressionService())->analyze([
+            'momentum_score' => 30,
+            'volatility_score' => 35,
+            'range_contraction_score' => 80,
+            'volume_fade_score' => 75,
+        ]);
+
+        $this->assertTrue($result['compression_detected']);
+        $this->assertContains('momentum_compressed', $result['reason_codes']);
+        $this->assertContains('volume_fade_high', $result['reason_codes']);
+    }
+
+    public function test_adaptive_exit_holds_strong_trade(): void
+    {
+        $action = (new AdaptiveExitService())->evaluate([
+            'price_structure_score' => 90,
+            'volume_confirmation_score' => 85,
+            'momentum_score' => 80,
+            'regime_fit' => 85,
+            'news_risk_score' => 10,
+            'execution_quality' => 80,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::HoldTrade->value, $action);
+    }
+
+    public function test_adaptive_exit_reduces_risk_on_compression(): void
+    {
+        $action = (new AdaptiveExitService())->evaluate([
+            'momentum_score' => 30,
+            'volatility_score' => 35,
+            'range_contraction_score' => 80,
+            'volume_fade_score' => 75,
+            'price_structure_score' => 65,
+            'volume_confirmation_score' => 60,
+            'regime_fit' => 60,
+            'news_risk_score' => 30,
+            'execution_quality' => 60,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::ReduceRisk->value, $action);
+    }
+
+    public function test_adaptive_exit_flags_exit_on_exhaustion(): void
+    {
+        $action = (new AdaptiveExitService())->evaluate([
+            'exhaustion_detected' => true,
+        ]);
+
+        $this->assertSame(AiRecommendedAction::ExitTrade->value, $action);
     }
 }

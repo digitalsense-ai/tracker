@@ -4,63 +4,91 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | ORB / Retest Strategy Parameters
+    | Core Engine Settings
     |--------------------------------------------------------------------------
     */
 
-    // Opening range length (minutes)
+    // Opening/setup range length in minutes
     'range_minutes' => 15,
 
-    // Entry condition: must close above ORB high by this buffer (percent). 0.00 = none
+    // Price must move this percent beyond the breakout level before entry is valid
     'entry_buffer_percent' => 0.00,
 
-    // Require a retest of ORB high before entry?
+    // Require price to retest the breakout level before entry
     'require_retest' => true,
 
-    // Stop Loss buffer (percent) applied to ORB low (use 0 for none)
+    // Extra percent buffer applied when placing the stop-loss
     'sl_buffer_percent' => 0.00,
 
-    // Take Profit levels as multiples of R (R = entry - SL). You can add/remove levels.
-    'tp_levels' => [
-        1.0, // TP1 = 1R
-        2.0, // TP2 = 2R
-    ],
+    // Master switch for take-profit handling. If false, exits use stop/trailing/manual logic only.
+    'take_profit_enabled' => true,
 
-    // Trailing stop: when first TP is hit, move SL to entry and continue seeking higher TPs
+    // Profit model:
+    // - full_exit: target closes the full trade
+    // - simple_runner: TP1 closes part, moves SL to break-even, and trails the remainder
+    // - no_tp: target is ignored
+    'tp_model' => 'simple_runner',
+
+    // Core profit trigger expressed as risk/reward multiple
+    'take_profit_rr' => 1.0,
+
+    // Simple runner defaults
+    'tp1_close_pct' => 0.50,
+    'move_sl_to_break_even_on_tp1' => true,
+    'runner_trailing_enabled' => true,
+    'runner_trail_distance_rr' => 1.0,
+
+    // Legacy switch: if true, the target becomes a trigger for runner mode instead of a final exit
     'enable_trailing_stop' => false,
 
-    // Max number of trades per ticker per day
-    'max_trades_per_ticker' => 1,
-
-    // Session window (New York time). Example '09:30' to '12:00'
+    // Session window (New York time)
     'session_start' => '09:30',
     'session_end'   => '12:00',
 
-    // ATR filter (minimum ATR to trade). null disables it.
+    // Minimum ATR required to allow trading. null disables the filter.
     'min_atr' => null,
 
+    // Risk management
+    'risk_per_trade' => 0.01,
+    'max_trades_per_ticker' => 1,
+    'max_trades_per_day' => 3,
 
     /*
     |--------------------------------------------------------------------------
-    | System Parameters
+    | Simulation / Execution Settings
     |--------------------------------------------------------------------------
     */
 
-    // Which ticker list to load (if applicable)
-    'ticker_list' => 'nordnet_tickers.json',
+    // Fee model (percent of notional per trade)
+    'fee_percent' => 0.10,
 
-    // Fee model (percent of notional per trade). Used elsewhere when computing P/L.
-    'fee_percent' => 0.10, // 0.10%
+    // Minimum broker fee charged per order
+    'fee_min_per_order' => 0.00,
 
-    // Execution delay in seconds (paper/live engines can apply this).
+    // Execution delay in seconds (paper/live engines can apply this)
     'execution_delay_sec' => 0,
 
-    // Datafeed source hint
+    /*
+    |--------------------------------------------------------------------------
+    | Market Data / Universe Settings
+    |--------------------------------------------------------------------------
+    */
+
+    // Market data source hint
     'datafeed' => 'yahoo', // or 'finnhub'
 
-    'risk_per_trade' => 0.01,
+    // Which ticker list to load
+    'ticker_list' => 'nordnet_tickers.json',
+
+    // Optional provider-specific symbol suffix rules
+    'yahoo_suffixes' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Optional Advanced Settings
+    |--------------------------------------------------------------------------
+    */
+
+    // Optional ATR-based stop multiplier for advanced stop logic
     'stop_loss_atr_multiplier' => 1.5,
-    'take_profit_rr' => 2,
-    'max_trades_per_day' => 3,
-    'allow_retest_entries' => true,
 ];

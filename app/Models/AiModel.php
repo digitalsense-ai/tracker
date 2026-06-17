@@ -14,7 +14,7 @@ class AiModel extends Model
         'allow_sleeper_strategies', 'default_risk_per_strategy_pct',
         'allow_activate_sleepers', 'allow_early_exit_on_invalidation',
         'max_adds_per_position', 'loop_min_price_move_pct',
-        'tags',
+        'tags', 'min_entry_score', 'min_hold_score'
     ];      
 
     protected $casts = [
@@ -28,6 +28,8 @@ class AiModel extends Model
         'max_adds_per_position'          => 'integer',
         'default_risk_per_strategy_pct'  => 'float',
         'loop_min_price_move_pct'        => 'float',
+        'min_entry_score'         => 'integer',
+        'min_hold_score'         => 'integer',
     ];
        
     public function positions()

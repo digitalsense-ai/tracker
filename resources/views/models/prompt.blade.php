@@ -8,7 +8,7 @@
 
 <div class="nav-tabs">
   @foreach($models as $model)
-    <a href="{{ route('models.show', $model->slug) }}" class="{{ ($model->slug == $m->slug) ? 'active' : '' }}">{{ $model->name }}</a>
+    <a href="{{ route('models.show', $model->slug) }}" class="{{ ($model->slug == $m->slug) ? 'active' : '' }}" style="{{ ($model->active) ? '' : 'opacity:0.5;' }}">{{ $model->name }}</a>
   @endforeach
 </div>
 

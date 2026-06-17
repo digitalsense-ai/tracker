@@ -35,9 +35,11 @@ class PlanKanbanController extends Controller
     {       
         $broker = app(PaperBroker::class);
 
-        $models = AiModel::orderByDesc('return_pct')->get();
+        //$models = AiModel::orderByDesc('return_pct')->get();
+        $models = AiModel::orderByDesc('active')->get();
 
         $model = AiModel::where('slug', $slug)->firstOrFail();
+        $minScore = (int) ($model->min_entry_score ?? 8);
 
         //$date = $request->query('date', now()->toDateString());
         $date = $request->query('date');
@@ -53,24 +55,71 @@ class PlanKanbanController extends Controller
 
             if($plan)
             {
+                // //Close SHORT for now                            
+                // $decision['orders'] = [
+                //     // 'AMD' => [
+                //     //     'symbol' => 'AMD',
+                //     //     'side' => 'BUY',
+                //     //     'direction' => 'short',
+                //     //     'qty' => 1,
+                //     //     'action' => 'CLOSE'
+                //     // ],
+                //     'BAC' => [
+                //         'symbol' => 'BAC',
+                //         'side' => 'BUY',
+                //         'direction' => 'short',
+                //         'qty' => 1,
+                //         'action' => 'CLOSE'
+                //     ],
+                // ];
+                // $broker->closePositionBySymbol($model, 'BAC', $decision);
+                // $broker->recalculateEquity($model);
+                // //Close SHORT for now
+
+                // dd("short position closed");
+
                 //Allowed Symbols only with mode = "active_on_open"
                 // Open positions
                 $open = Position::where('ai_model_id', $model->id)
                             ->where('status', 'open')
+                            //->where('side', 'long') //for time-being - omitting short direction
                             ->pluck('ticker');                
 
+                // $approved = collect($plan['plan_json'] ?? [])
+                //                 ->filter(fn ($s) =>
+                //                 is_array($s) 
+                //                 &&
+                //                     (
+                //                         (!empty($s['approved']) && $s['approved']) ||
+                //                         (($s['status'] ?? null) === 'approved') ||
+                //                         (!empty($s['keep']))
+                //                     )
+                //                 && (($s['mode'] ?? null) === 'active_on_open')
+                //                 && (($s['direction'] ?? null) === 'long')    //for time-being - omitting short direction
+                //                 )
+                //                 ->pluck('symbol');
+
                 $approved = collect($plan['plan_json'] ?? [])
-                                ->filter(fn ($s) =>
-                                is_array($s) 
-                                &&
-                                    (
-                                        (!empty($s['approved']) && $s['approved']) ||
-                                        (($s['status'] ?? null) === 'approved') ||
-                                        (!empty($s['keep']))
-                                    )
-                                && (($s['mode'] ?? null) === 'active_on_open')    
-                                )
-                                ->pluck('symbol');
+                    ->filter(function ($s) use ($minScore) {
+
+                        if (!is_array($s)) {
+                            return false;
+                        }
+
+                        $isApproved =
+                            (!empty($s['approved']) && $s['approved'] === true) ||
+                            (($s['status'] ?? null) === 'approved') ||
+                            (!empty($s['keep']));
+
+                        return $isApproved
+                            && ($s['mode'] ?? null) === 'active_on_open'
+                            //&& ($s['direction'] ?? null) === 'long'   //for time-being - omitting short direction
+                            //&& ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                            ;
+                    })
+                    ->pluck('symbol')
+                    ->filter() 
+                    ->values();     // reset indexes
 
                 $allowed = $approved
                             ->map(fn ($s) => strtoupper($s))
@@ -84,6 +133,10 @@ class PlanKanbanController extends Controller
                 $strategies = $plan ? ($plan->plan_json ?? []) : [];
 
                 foreach ($strategies as $idx => &$s) {
+                    // //for time-being - omitting short direction
+                    // if ($s['direction'] == 'short')
+                    //     continue;
+
                     if (!is_array($s)) {
                         continue;
                     }
@@ -91,11 +144,25 @@ class PlanKanbanController extends Controller
                         $s['id'] = $idx;
                     }
 
-                    $id = (string) $s['id'];
-                    if(isset($s['approved']))                
-                        $s['approved'] = (!$s['approved']) ? true : $s['approved'];
+                    $id = (string) $s['id'];                    
+                    if(isset($s['approved']))
+                    {
+                        if(isset($s['status']))
+                        {
+                            if($s['status'] == 'approved')
+                                $s['approved'] = true;
+                        }
+
+                         $s['approved'] = (!$s['approved']) ? true : $s['approved'];
+                    }
                     else               
                         $s['approved'] = true;
+
+                    if ($s['direction'] != 'long' || 
+                       // ((float) ($s['entry_score'] ?? 0) >= $minScore)
+                         ((float) ($s['entry_score'] ?? 0) < $minScore)
+                    )
+                        $s['approved'] = false;
 
                     //Move to LIVE TRADE (LANE 3) without AI Tick when mode = "active_on_open"
                     // Support either `symbol` or `ticker` from the AI
@@ -160,16 +227,21 @@ class PlanKanbanController extends Controller
                     $s['id'] = $idx;
                 }
 
-                if (!empty($s['approved'])) {
-                    $approved[] = $s;
+                if (!empty($s['approved'])) {                    
+                    $approved[] = $s;               
                 } else {
-                    $ideaPool[] = $s;
-                }
+                    if(isset($s['status']))
+                    {
+                        if($s['status'] != 'approved')
+                            $ideaPool[] = $s;
+                    }
+                }    
             }
         }//for loop plans
 
         $openPositions = Position::where('ai_model_id', $model->id)
             ->where('status', 'open')
+            ->where('side', 'long') //for time-being - omitting short direction
             ->orderByDesc('opened_at')
             ->get();
 
@@ -207,6 +279,53 @@ class PlanKanbanController extends Controller
                 //$s['InstrumentDetails'] = $data;
                 $openPosition['marketTiming'] = $marketTiming;                
             }
+
+            //Watchlist - for openPositions
+            $matchedOpenPositionList = null;
+
+            $openPositionsLogs = ModelLog::where('ai_model_id', $model->id)
+                                    ->where('action', 'HOLD')                                   
+                                    ->orderByDesc('id')
+                                    ->get();
+
+            foreach ($openPositionsLogs as $openPositionsLog) {
+
+                $prompt = $openPositionsLog->payload['raw']['prompt'] ?? null;
+
+                if (!$prompt) {
+                    continue;
+                }
+
+                preg_match(
+                    '/Here is your current trading state as JSON:\s*(\{.*?\})\s*Instructions for this model:/s',
+                    $prompt,
+                    $matches
+                );
+
+                if (empty($matches[1])) {
+                    continue;
+                }
+
+                $data = json_decode($matches[1], true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    continue;
+                }
+
+                $open_position_list = $data['open_positions'] ?? [];
+
+                $openPositionItem = collect($open_position_list)
+                    ->firstWhere('symbol', $sym);
+
+                if ($openPositionItem) {
+                    $matchedOpenPositionList = $openPositionItem;
+                    break;
+                }
+            }
+
+            // merge watchlist data into open position
+            $openPosition->watchlist = $matchedOpenPositionList;
+            //END Watchlist - for openPositions
         }
 
         $completedTrades = Trade::where('ai_model_id', $model->id)
@@ -238,6 +357,60 @@ class PlanKanbanController extends Controller
         // Replace the original approved list
         $approved = $approvedFiltered;
 
+        //Watchlist - for for lane 1 and 2 
+        foreach ($approved as $key => $trade) {
+
+            $matchedWatchlist = null;
+
+            $trade_symbol = strtoupper($trade['symbol'] ?? $trade['ticker'] ?? '');
+            //$closedAt = Carbon::parse($trade->closed_at);
+
+            $completedTradesLogs = ModelLog::where('ai_model_id', $model->id)
+                                    ->where('action', 'HOLD')                                    
+                                    ->orderByDesc('id')
+                                    ->get();
+
+            foreach ($completedTradesLogs as $completedTradesLog) {
+
+                $prompt = $completedTradesLog->payload['raw']['prompt'] ?? null;
+
+                if (!$prompt) {
+                    continue;
+                }
+
+                preg_match(
+                    '/Here is your current trading state as JSON:\s*(\{.*?\})\s*Instructions for this model:/s',
+                    $prompt,
+                    $matches
+                );
+
+                if (empty($matches[1])) {
+                    continue;
+                }
+
+                $data = json_decode($matches[1], true);
+
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    continue;
+                }
+
+                $watchlist = $data['watchlist'] ?? [];
+
+                $watchItem = collect($watchlist)
+                    ->firstWhere('ticker', $trade_symbol);
+
+                if ($watchItem) {
+                    $matchedWatchlist = $watchItem;
+                    break;
+                }
+            }
+
+            // merge watchlist data into trade
+            //$trade['watchlist'] = $matchedWatchlist;
+            $approved[$key]['watchlist'] = $matchedWatchlist;            
+        }
+        //END Watchlist - for lane 1 and 2 
+
         return view('models.kanban', [
             'models'    => $models,
             'model'           => $model,
@@ -249,7 +422,92 @@ class PlanKanbanController extends Controller
             'completedTrades' => $completedTrades,
         ]);
     }
-        
+           
+    function getMarketTiming(array $instrumentDetails): array
+    {
+        $sessions = collect($instrumentDetails['Sessions']);
+        $exchangeOffset = $instrumentDetails['TimeZoneOffset']; // "-05:00:00"
+
+        $nowUtc = now()->utc();
+
+        // Convert offset string to minutes
+        $offsetMinutes = $this->convertOffsetToMinutes($exchangeOffset);
+
+        // Exchange local time
+        $nowExchange = $nowUtc->copy()->utcOffset($offsetMinutes);
+
+        // 1️⃣ Find current session
+        $currentSession = $sessions->first(function ($session) use ($nowUtc) {
+
+            return $nowUtc->gte(Carbon::parse($session['StartTime'])->utc())
+                && $nowUtc->lt(Carbon::parse($session['EndTime'])->utc());
+        });
+
+        $currentState = $currentSession['State'] ?? 'Closed';
+
+        // 2️⃣ Market OPEN
+        if ($currentState === 'AutomatedTrading') {
+
+            $end = Carbon::parse($currentSession['EndTime'])->utc();
+
+            $diff = $nowUtc->diff($end);
+
+            return [
+                'is_open' => true,
+                'state' => $currentState,
+                'message' => 'Market closes in ' . $diff->format('%hh %Im'),
+                'exchange_time' => $nowExchange->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        // 3️⃣ Find next AutomatedTrading session
+        $nextOpenSession = $sessions
+            ->filter(fn ($s) =>
+                $s['State'] === 'AutomatedTrading'
+                && Carbon::parse($s['StartTime'])->utc()->gt($nowUtc)
+            )
+            ->sortBy('StartTime')
+            ->first();
+
+        if ($nextOpenSession) {
+
+            $openTimeUtc = Carbon::parse($nextOpenSession['StartTime'])->utc();
+
+            $diff = $nowUtc->diff($openTimeUtc);
+
+            $openTimeExchange = $openTimeUtc
+                ->copy()
+                ->utcOffset($offsetMinutes);
+
+            return [
+                'is_open' => false,
+                'state' => $currentState,
+                'message' => 'Market opens in ' . $diff->format('%hh %Im'),
+                'opens_at_exchange_time' => $openTimeExchange->format('Y-m-d H:i:s'),
+                'exchange_time_now' => $nowExchange->format('Y-m-d H:i:s'),
+            ];
+        }
+
+        return [
+            'is_open' => false,
+            'state' => 'Closed',
+            'message' => 'No upcoming trading session found',
+        ];
+    }
+
+    function convertOffsetToMinutes(string $offset): int
+    {
+        preg_match('/([+-]?)(\d{2}):(\d{2})/', $offset, $matches);
+
+        $sign = ($matches[1] ?? '+') === '-' ? -1 : 1;
+
+        $hours = (int) ($matches[2] ?? 0);
+        $minutes = (int) ($matches[3] ?? 0);
+
+        return $sign * (($hours * 60) + $minutes);
+    }
+
+/*
     function getMarketTiming(array $instrumentDetails): array
     {
         $sessions = collect($instrumentDetails['Sessions']);
@@ -312,6 +570,7 @@ class PlanKanbanController extends Controller
             'message' => 'No upcoming trading session found',
         ];
     }
+*/
 
     /**
      * Update approvals for today's strategies.
@@ -319,6 +578,8 @@ class PlanKanbanController extends Controller
     public function update(string $slug, Request $request)
     {
         $model = AiModel::where('slug', $slug)->firstOrFail();
+        $minScore = (int) ($model->min_entry_score ?? 8);
+
         $date  = $request->input('date', now()->toDateString());
 
         $plan = AiDailyPlan::where('ai_model_id', $model->id)
@@ -340,12 +601,19 @@ class PlanKanbanController extends Controller
         $approvedIds = array_map('strval', $approvedIds);
 
         foreach ($strategies as $idx => &$s) {
+            //for time-being - omitting short direction
+            if ($s['direction'] != 'long' ||
+                //((float) ($s['entry_score'] ?? 0) >= $minScore)
+                ((float) ($s['entry_score'] ?? 0) < $minScore)
+            )
+                continue;
+
             if (!is_array($s)) {
                 continue;
             }
             if (!isset($s['id'])) {
                 $s['id'] = $idx;
-            }
+            }            
 
             $id = (string) $s['id'];
             $s['approved'] = in_array($id, $approvedIds, true);
